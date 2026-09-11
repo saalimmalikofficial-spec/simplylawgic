@@ -6,6 +6,9 @@ import '../models/student_model.dart';
 import '../models/subject_notes.dart';
 import '../models/test_series.dart';
 
+import 'dart:io';
+import 'package:http_parser/http_parser.dart'; // Add this import at top
+
 class ApiService {
   static const String baseUrl = 'https://simply-lawgic-75585420080.asia-south1.run.app/api';
   final StorageService _storage = StorageService();
@@ -364,6 +367,254 @@ class ApiService {
       } else {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to submit test');
+      }
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // Get student dashboard analytics
+  Future<Map<String, dynamic>> getStudentAnalytics({int limit = 50}) async {
+    final url = Uri.parse('$baseUrl/student/dashboard/analytics?limit=$limit');
+
+    try {
+      final token = await _getToken();
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to fetch analytics');
+      }
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  //profile section
+  // ============ CHANGE PHONE ============
+
+// Send OTP to new phone number
+  Future<Map<String, dynamic>> changePhoneSendOtp(String phone) async {
+    final url = Uri.parse('$baseUrl/student/auth/change-phone/send-otp');
+
+    try {
+      final token = await _getToken();
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'phone': phone,
+        }),
+      );
+
+      print('changePhoneSendOtp status: ${response.statusCode}');
+      print('changePhoneSendOtp body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to send OTP');
+      }
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+// Verify OTP and update phone
+  Future<Map<String, dynamic>> changePhoneVerify(
+      String phone, String otp) async {
+    final url = Uri.parse('$baseUrl/student/auth/change-phone/verify');
+
+    try {
+      final token = await _getToken();
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'phone': phone,
+          'otp': otp,
+        }),
+      );
+
+      print('changePhoneVerify status: ${response.statusCode}');
+      print('changePhoneVerify body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+
+        // Save new token if provided
+        if (data['token'] != null) {
+          await _storage.saveToken(data['token']);
+        }
+
+        return data;
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to verify OTP');
+      }
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+  // ============ CHANGE EMAIL ============
+
+// Step 1: Send OTP to confirm new email
+  Future<Map<String, dynamic>> changeEmailSendOtp(String email) async {
+    final url = Uri.parse('$baseUrl/student/auth/change-email/send-otp');
+
+    try {
+      final token = await _getToken();
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'email': email,
+        }),
+      );
+
+      print('changeEmailSendOtp status: ${response.statusCode}');
+      print('changeEmailSendOtp body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to send OTP');
+      }
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+// Step 2: Verify OTP and update email
+  Future<Map<String, dynamic>> changeEmailVerify(
+      String email, String otp) async {
+    final url = Uri.parse('$baseUrl/student/auth/change-email/verify');
+
+    try {
+      final token = await _getToken();
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'email': email,
+          'otp': otp,
+        }),
+      );
+
+      print('changeEmailVerify status: ${response.statusCode}');
+      print('changeEmailVerify body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+
+        // Save new token
+        if (data['token'] != null) {
+          await _storage.saveToken(data['token']);
+        }
+
+        // Save updated student object
+        if (data['student'] != null) {
+          // Agar aapke StorageService mein saveStudent method hai toh:
+          // await _storage.saveStudent(Student.fromJson(data['student']));
+        }
+
+        return data;
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to verify OTP');
+      }
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+
+// ============ UPLOAD AVATAR ============
+
+  Future<Map<String, dynamic>> uploadAvatar(File imageFile) async {
+    final url = Uri.parse('$baseUrl/student/auth/avatar');
+
+    try {
+      final token = await _getToken();
+
+      // Create multipart request
+      final request = http.MultipartRequest('POST', url);
+
+      // Add headers
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add file with proper content type
+      final extension = imageFile.path.split('.').last.toLowerCase();
+      MediaType contentType;
+
+      switch (extension) {
+        case 'png':
+          contentType = MediaType('image', 'png');
+          break;
+        case 'webp':
+          contentType = MediaType('image', 'webp');
+          break;
+        case 'jpg':
+        case 'jpeg':
+        default:
+          contentType = MediaType('image', 'jpeg');
+          break;
+      }
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'avatar', // API field name
+          imageFile.path,
+          contentType: contentType,
+        ),
+      );
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('uploadAvatar status: ${response.statusCode}');
+      print('uploadAvatar body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+
+        // Save new token
+        if (data['token'] != null) {
+          await _storage.saveToken(data['token']);
+        }
+
+        // Save updated student
+        if (data['student'] != null) {
+          await _storage.saveStudent(Student.fromJson(data['student']));
+        }
+
+        return data;
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to upload avatar');
       }
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');

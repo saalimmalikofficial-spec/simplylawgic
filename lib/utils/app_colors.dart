@@ -15,4 +15,14 @@ class AppColors {
   static const Color textSecondary = Color(0xFF6B7280);
   static const Color border = Color(0xFFE5E7EB);
   static const Color error = Color(0xFFE53935);
+
+  static const primaryLight = Color(0xFFA29BFE);
+
+  static const success = Color(0xFF00B894);
+  static const danger = Color(0xFFE17055);
+  static const warning = Color(0xFFFDCB6E);
+  static const bg = Color(0xFFF7F7FB);
+  static const cardShadow = Color(0x14000000);
+  static const textDark = Color(0xFF1A1A2E);
+  static const textMuted = Color(0xFF8A8AA3);
 }

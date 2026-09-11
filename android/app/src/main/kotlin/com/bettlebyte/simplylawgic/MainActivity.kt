@@ -1,4 +1,4 @@
-package com.bettlebyte.simplylawgic.simplylawgic
+package com.bettlebyte.simplylawgic
 
 import io.flutter.embedding.android.FlutterActivity
 

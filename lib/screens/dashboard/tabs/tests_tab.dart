@@ -45,7 +45,6 @@ class _TestsTabState extends State<TestsTab> {
 
     try {
       final tests = await _apiService.getTestSeries();
-
       setState(() {
         _testSeries = tests;
         _filteredTests = tests;
@@ -61,7 +60,6 @@ class _TestsTabState extends State<TestsTab> {
     }
   }
 
-  // Debounced so filtering doesn't run on every single keystroke.
   void _onSearchChanged(String value) {
     setState(() => _searchQuery = value);
     _debounce?.cancel();
@@ -71,16 +69,14 @@ class _TestsTabState extends State<TestsTab> {
   void _filterTests() {
     if (!mounted) return;
     setState(() {
-      String query = _searchQuery.toLowerCase().trim();
+      final query = _searchQuery.toLowerCase().trim();
 
       _filteredTests = _testSeries.where((test) {
-        // Search filter
-        bool matchesSearch = query.isEmpty ||
+        final matchesSearch = query.isEmpty ||
             test.title.toLowerCase().contains(query) ||
             test.subjectName.toLowerCase().contains(query) ||
             test.description.toLowerCase().contains(query);
 
-        // Category filter
         bool matchesCategory = true;
         if (_selectedFilter == 'Major Laws') {
           matchesCategory = test.subjectCategory == 'Major Laws';
@@ -88,7 +84,6 @@ class _TestsTabState extends State<TestsTab> {
           matchesCategory = test.subjectCategory == 'Minor Laws';
         }
 
-        // Price filter
         bool matchesPrice = true;
         if (_selectedFilter == 'Free') {
           matchesPrice = !test.isPaid;
@@ -96,12 +91,9 @@ class _TestsTabState extends State<TestsTab> {
           matchesPrice = test.isPaid;
         }
 
-        // Popular filter
         bool matchesPopular = true;
         if (_selectedFilter == 'Popular') {
-          matchesPopular = test.tags.any((tag) =>
-          tag.toLowerCase() == 'popular'
-          );
+          matchesPopular = test.tags.any((tag) => tag.toLowerCase() == 'popular');
         }
 
         return matchesSearch && matchesCategory && matchesPrice && matchesPopular;
@@ -121,27 +113,39 @@ class _TestsTabState extends State<TestsTab> {
 
   @override
   Widget build(BuildContext context) {
-    // No nested Scaffold — this tab already lives inside the dashboard's
-    // Scaffold (bottom nav). RefreshIndicator wraps the content directly.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF0A0A0F) : AppColors.bg;
+    final cardColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final textColor = isDark ? Colors.white : AppColors.textDark;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final shadowColor = isDark ? Colors.white.withOpacity(0.03) : AppColors.cardShadow;
+
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: _loadTestSeries,
       child: Container(
-        color: AppColors.background,
+        color: backgroundColor,
         child: _isLoading
-            ? Center(child: CircularProgressIndicator(color: AppColors.primary))
+            ? Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primary,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isDark ? Colors.white : AppColors.primary,
+            ),
+          ),
+        )
             : _errorMessage != null
-            ? _buildErrorView()
+            ? _buildErrorView(isDark)
             : _testSeries.isEmpty
-            ? _buildEmptyView()
+            ? _buildEmptyView(isDark, secondaryTextColor)
             : Column(
           children: [
-            _buildSearchBar(),
-            _buildFilterChips(),
+            _buildHeaderSection(isDark, borderColor, cardColor, secondaryTextColor),
             Expanded(
               child: _filteredTests.isEmpty
-                  ? _buildNoResultsView()
-                  : _buildTestList(),
+                  ? _buildNoResultsView(isDark, secondaryTextColor)
+                  : _buildTestList(isDark, cardColor, borderColor, shadowColor, textColor, secondaryTextColor),
             ),
           ],
         ),
@@ -149,274 +153,116 @@ class _TestsTabState extends State<TestsTab> {
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildHeaderSection(bool isDark, Color borderColor, Color cardColor, Color secondaryTextColor) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      color: Colors.white,
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onSearchChanged,
-        style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
-        decoration: InputDecoration(
-          hintText: 'Search test series...',
-          hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.6), fontSize: 14),
-          prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-            icon: Icon(Icons.clear, color: AppColors.textSecondary),
-            onPressed: _clearSearch,
-          )
-              : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.border),
+      decoration: BoxDecoration(
+        color: cardColor,
+        border: Border(bottom: BorderSide(color: borderColor)),
+      ),
+      child: Column(
+        children: [
+          _buildSearchBar(isDark, borderColor, secondaryTextColor),
+          _buildFilterChips(isDark, borderColor, secondaryTextColor),
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(bool isDark, Color borderColor, Color secondaryTextColor) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Container(
+        height: 46,
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0A0A0F) : AppColors.bg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: borderColor),
+        ),
+        child: TextField(
+          controller: _searchController,
+          onChanged: _onSearchChanged,
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.white : AppColors.textPrimary,
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.border),
+          decoration: InputDecoration(
+            hintText: 'Search test series, subjects...',
+            hintStyle: TextStyle(
+              color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+              fontSize: 13,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+              size: 20,
+            ),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+              icon: Icon(
+                Icons.cancel_rounded,
+                color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+                size: 18,
+              ),
+              onPressed: _clearSearch,
+            )
+                : null,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppColors.primary, width: 1.6),
-          ),
-          filled: true,
-          fillColor: const Color(0xFFF7F8FA),
-          contentPadding: const EdgeInsets.symmetric(vertical: 0),
         ),
       ),
     );
   }
 
-  Widget _buildFilterChips() {
-    final popularCount = _testSeries.where((t) =>
-        t.tags.any((tag) => tag.toLowerCase() == 'popular')
-    ).length;
-
+  Widget _buildFilterChips(bool isDark, Color borderColor, Color secondaryTextColor) {
     final filters = ['All', 'Popular', 'Major Laws', 'Minor Laws', 'Free', 'Paid'];
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.white,
-      child: SingleChildScrollView(
+    return SizedBox(
+      height: 38,
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        child: Row(
-          children: filters.map((filter) {
-            final isSelected = _selectedFilter == filter;
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: filters.length,
+        itemBuilder: (context, index) {
+          final filter = filters[index];
+          final isSelected = _selectedFilter == filter;
 
-            Color getChipColor() {
-              if (filter == 'Popular' && isSelected) {
-                return Colors.orange.shade600;
-              }
-              return isSelected ? AppColors.primary : Colors.white;
-            }
-
-            Color getTextColor() {
-              if (isSelected) {
-                return Colors.white;
-              }
-              return AppColors.textSecondary;
-            }
-
-            IconData? getIcon() {
-              if (filter == 'Popular') {
-                return Icons.star;
-              }
-              return null;
-            }
-
-            String getLabel() {
-              if (filter == 'Popular') {
-                return 'Popular ($popularCount)';
-              }
-              return filter;
-            }
-
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: FilterChip(
-                showCheckmark: false, // custom color/icon already signal selection
-                label: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (getIcon() != null) ...[
-                      Icon(
-                        getIcon(),
-                        size: 16,
-                        color: getTextColor(),
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    Text(
-                      getLabel(),
-                      style: TextStyle(
-                        color: getTextColor(),
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-                selected: isSelected,
-                onSelected: (selected) {
-                  setState(() {
-                    _selectedFilter = filter;
-                  });
-                  _filterTests();
-                },
-                backgroundColor: Colors.white,
-                selectedColor: getChipColor(),
-                side: BorderSide(
-                  color: isSelected
-                      ? (filter == 'Popular' ? Colors.orange.shade600 : AppColors.primary)
-                      : AppColors.border,
-                  width: isSelected ? 1.6 : 1,
-                ),
-                shape: StadiumBorder(
-                  side: BorderSide(
-                    color: isSelected
-                        ? (filter == 'Popular' ? Colors.orange.shade600 : AppColors.primary)
-                        : AppColors.border,
-                  ),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(filter),
+              selected: isSelected,
+              onSelected: (_) {
+                setState(() => _selectedFilter = filter);
+                _filterTests();
+              },
+              selectedColor: filter == 'Popular' ? Colors.amber.shade700 : AppColors.primary,
+              backgroundColor: isDark ? const Color(0xFF0A0A0F) : AppColors.bg,
+              showCheckmark: false,
+              labelStyle: TextStyle(
+                color: isSelected
+                    ? Colors.white
+                    : isDark
+                    ? Colors.white.withOpacity(0.6)
+                    : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 12,
               ),
-            );
-          }).toList(),
-        ),
+              side: BorderSide(
+                color: isSelected
+                    ? (filter == 'Popular' ? Colors.amber.shade700 : AppColors.primary)
+                    : borderColor,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildNoResultsView() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(40.0),
-          child: Column(
-            children: [
-              Icon(
-                Icons.search_off,
-                size: 80,
-                color: AppColors.textSecondary.withOpacity(0.4),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No Results Found',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Try adjusting your search or filter',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _clearSearch,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'Clear Filters',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildErrorView() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(40.0),
-          child: Column(
-            children: [
-              const SizedBox(height: 40),
-              Icon(
-                Icons.error_outline,
-                size: 60,
-                color: AppColors.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loadTestSeries,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                ),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyView() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 100),
-          child: Column(
-            children: [
-              Icon(
-                Icons.assignment_outlined,
-                size: 80,
-                color: AppColors.textSecondary.withOpacity(0.4),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No Tests Available',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Check back later for new test series',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTestList() {
+  Widget _buildTestList(bool isDark, Color cardColor, Color borderColor, Color shadowColor, Color textColor, Color secondaryTextColor) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _filteredTests.length,
@@ -425,6 +271,12 @@ class _TestsTabState extends State<TestsTab> {
         return TestCard(
           key: ValueKey(test.slug),
           test: test,
+          isDark: isDark,
+          cardColor: cardColor,
+          borderColor: borderColor,
+          shadowColor: shadowColor,
+          textColor: textColor,
+          secondaryTextColor: secondaryTextColor,
           onTap: () {
             Navigator.push(
               context,
@@ -437,42 +289,332 @@ class _TestsTabState extends State<TestsTab> {
       },
     );
   }
+
+  Widget _buildNoResultsView(bool isDark, Color secondaryTextColor) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 20),
+          child: Column(
+            children: [
+              Icon(
+                Icons.search_off_rounded,
+                size: 64,
+                color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No Match Found',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Try searching with a different keyword or filter',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: secondaryTextColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: _clearSearch,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Reset Search'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorView(bool isDark) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 20),
+          child: Column(
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 56, color: AppColors.error),
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage ?? 'An error occurred',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.white70 : AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _loadTestSeries,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyView(bool isDark, Color secondaryTextColor) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 100),
+          child: Column(
+            children: [
+              Icon(
+                Icons.assignment_outlined,
+                size: 64,
+                color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No Test Series Available',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Check back later for newly published test modules',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: secondaryTextColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-/// Small pill/badge used for category, popular and test-count tags.
-/// Pulled out of TestCard so the same badge styling isn't rebuilt three
-/// times with slightly different padding/decoration each time.
-class _Badge extends StatelessWidget {
-  final Widget? icon;
-  final String text;
-  final Color color;
-  final Color? backgroundColor;
-  final Color? borderColor;
+class TestCard extends StatelessWidget {
+  final TestSeries test;
+  final bool isDark;
+  final Color cardColor;
+  final Color borderColor;
+  final Color shadowColor;
+  final Color textColor;
+  final Color secondaryTextColor;
+  final VoidCallback onTap;
 
-  const _Badge({
-    required this.text,
-    required this.color,
-    this.icon,
-    this.backgroundColor,
-    this.borderColor,
+  const TestCard({
+    super.key,
+    required this.test,
+    required this.isDark,
+    required this.cardColor,
+    required this.borderColor,
+    required this.shadowColor,
+    required this.textColor,
+    required this.secondaryTextColor,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isPopular = test.tags.any((tag) => tag.toLowerCase() == 'popular');
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: backgroundColor ?? color.withOpacity(0.12),
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: borderColor != null ? Border.all(color: borderColor!) : null,
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                child: Container(
+                  height: 110,
+                  width: double.infinity,
+                  color: AppColors.primary.withOpacity(0.08),
+                  child: test.coverImageUrl.isNotEmpty
+                      ? Image.network(
+                    test.coverImageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _buildPlaceholderHeader(),
+                  )
+                      : _buildPlaceholderHeader(),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _Badge(
+                          text: test.subjectCategory.toUpperCase(),
+                          color: AppColors.primary,
+                          backgroundColor: AppColors.primary.withOpacity(0.08),
+                          isDark: isDark,
+                        ),
+                        const Spacer(),
+                        if (isPopular) ...[
+                          _Badge(
+                            text: 'Popular',
+                            color: Colors.amber.shade800,
+                            backgroundColor: Colors.amber.shade50,
+                            icon: Icon(Icons.star_rounded, size: 12, color: Colors.amber.shade800),
+                            isDark: isDark,
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        _Badge(
+                          text: '${test.testCount} Tests',
+                          color: AppColors.secondary,
+                          backgroundColor: AppColors.secondary.withOpacity(0.08),
+                          icon: Icon(Icons.assignment_outlined, size: 12, color: AppColors.secondary),
+                          isDark: isDark,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      test.title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: textColor,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      test.description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: secondaryTextColor,
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 12),
+                    if (test.tags.isNotEmpty) ...[
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: test.tags.where((t) => t.toLowerCase() != 'popular').map((tag) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF0A0A0F) : AppColors.bg,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: Text(
+                              '#$tag',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          test.isPaid ? '₹${test.priceAmount} ${test.currency}' : 'FREE',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: test.isPaid ? AppColors.primary : AppColors.secondary,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Text(
+                                'View Details',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderHeader() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (icon != null) ...[icon!, const SizedBox(width: 4)],
+          Icon(Icons.menu_book_rounded, size: 36, color: AppColors.primary.withOpacity(0.6)),
+          const SizedBox(height: 4),
           Text(
-            text,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+            test.subjectName,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary.withOpacity(0.8),
+            ),
           ),
         ],
       ),
@@ -480,214 +622,42 @@ class _Badge extends StatelessWidget {
   }
 }
 
-// Test Card Widget
-class TestCard extends StatelessWidget {
-  final TestSeries test;
-  final VoidCallback onTap;
+class _Badge extends StatelessWidget {
+  final Widget? icon;
+  final String text;
+  final Color color;
+  final Color backgroundColor;
+  final bool isDark;
 
-  const TestCard({
-    super.key,
-    required this.test,
-    required this.onTap,
+  const _Badge({
+    required this.text,
+    required this.color,
+    required this.backgroundColor,
+    this.icon,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    Color getCategoryColor(String category) {
-      switch (category.toLowerCase()) {
-        case 'major laws':
-          return AppColors.primary;
-        case 'minor laws':
-          return const Color(0xFF00B894);
-        default:
-          return AppColors.primary;
-      }
-    }
-
-    final isPopular = test.tags.any((tag) => tag.toLowerCase() == 'popular');
-    final categoryColor = getCategoryColor(test.subjectCategory);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.textPrimary.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[icon!, const SizedBox(width: 3)],
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 120,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: categoryColor.withOpacity(0.12),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-                image: test.coverImageUrl.isNotEmpty
-                    ? DecorationImage(
-                  image: NetworkImage(test.coverImageUrl),
-                  fit: BoxFit.cover,
-                  onError: (_, __) {},
-                )
-                    : null,
-              ),
-              child: test.coverImageUrl.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.assignment, size: 48, color: categoryColor),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        test.title,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: categoryColor,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-                  : null,
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _Badge(
-                        text: test.subjectCategory.toUpperCase(),
-                        color: categoryColor,
-                      ),
-                      const Spacer(),
-                      if (isPopular) ...[
-                        _Badge(
-                          text: 'Popular',
-                          color: Colors.orange.shade700,
-                          backgroundColor: Colors.orange.shade50,
-                          borderColor: Colors.orange.shade200,
-                          icon: Icon(Icons.star, size: 12, color: Colors.orange.shade700),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      _Badge(
-                        text: '${test.testCount} Tests',
-                        color: Colors.blue.shade700,
-                        backgroundColor: Colors.blue.shade50,
-                        icon: Icon(Icons.quiz, size: 14, color: Colors.blue.shade700),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    test.title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: AppColors.textPrimary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    test.description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 12),
-                  if (test.tags.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: test.tags.map((tag) {
-                        if (tag.toLowerCase() == 'popular') return const SizedBox.shrink();
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF7F8FA),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Text(
-                            '#$tag',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          test.isPaid
-                              ? '₹${test.priceAmount} ${test.currency}'
-                              : 'FREE',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: test.isPaid
-                                ? AppColors.primary
-                                : Colors.green.shade700,
-                          ),
-                        ),
-                      ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        ),
-                        onPressed: onTap,
-                        child: const Text(
-                          'View Details',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

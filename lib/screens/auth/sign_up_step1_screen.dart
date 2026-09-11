@@ -2,9 +2,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:simplylawgic/services/api_service.dart';
+import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/utils/validators.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
 import 'package:simplylawgic/screens/auth/sign_up_step2_screen.dart';
+import 'package:simplylawgic/screens/dashboard/dashboard_screen.dart';
+import 'package:simplylawgic/models/student_model.dart';
 
 class SignUpStep1Screen extends StatefulWidget {
   const SignUpStep1Screen({super.key});
@@ -25,6 +28,7 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
   final List<FocusNode> _otpFocusNodes = List.generate(4, (_) => FocusNode());
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
+  final StorageService _storage = StorageService();
 
   @override
   void dispose() {
@@ -108,29 +112,76 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
       final response = await _apiService.verifyOTP(cleanPhone, otp);
 
       if (mounted) {
-        // Save the verification token
-        _phoneVerificationToken = response['phoneVerificationToken'];
+        // Check if user already exists (response contains token and student)
+        if (response.containsKey('token') && response.containsKey('student')) {
+          // User exists - handle sign in
+          final student = Student.fromJson(response['student']);
+          final profileComplete = response['profileComplete'] ?? false;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response['message'] ?? 'Phone verified successfully'),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+          // Save using the comprehensive method
+          await _storage.saveToken(response['token']);
+          await _storage.saveStudent(student);
+          await _storage.saveProfileComplete(profileComplete);
 
-        // Navigate to Step 2 with phone and verification token
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => SignUpStep2Screen(
-              phone: cleanPhone,
-              phoneVerificationToken: _phoneVerificationToken!,
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['message'] ?? 'Signed in successfully!'),
+              backgroundColor: Colors.green.shade600,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 2),
             ),
-          ),
-        );
+          );
+
+          // Navigate based on profile completion
+          if (profileComplete) {
+            // Profile is complete → go to Dashboard
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const DashboardScreen()),
+                  (route) => false,
+            );
+          } else {
+            // Profile is incomplete → go to Step 2
+            // For existing user with incomplete profile, pass token or empty string
+            final String token = response['token'] ?? '';
+
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (context) => SignUpStep2Screen(
+                  phone: cleanPhone,
+                  phoneVerificationToken: token, // Pass the token with null safety
+                ),
+              ),
+                  (route) => false,
+            );
+          }
+        } else if (response.containsKey('phoneVerificationToken')) {
+          // New user - complete sign up
+          _phoneVerificationToken = response['phoneVerificationToken'];
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['message'] ?? 'Phone verified successfully'),
+              backgroundColor: Colors.green.shade600,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          // Navigate to Step 2 with phone and verification token
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => SignUpStep2Screen(
+                phone: cleanPhone,
+                phoneVerificationToken: _phoneVerificationToken!,
+              ),
+            ),
+          );
+        } else {
+          throw Exception('Invalid response from server');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -157,13 +208,21 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF0A0A0F) : AppColors.background;
+    final textColor = isDark ? Colors.white : AppColors.textPrimary;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final cardColor = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF7F8FA);
+    final borderColor = isDark ? Colors.white.withOpacity(0.1) : AppColors.border;
+    final appBarColor = isDark ? const Color(0xFF12121A) : Colors.transparent;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: appBarColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_rounded, color: textColor),
           onPressed: _isLoading ? null : () => Navigator.pop(context),
         ),
       ),
@@ -192,7 +251,7 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+                    color: textColor,
                     letterSpacing: -0.5,
                   ),
                 ),
@@ -201,19 +260,19 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                   _otpSent
                       ? "Enter the 4-digit code sent to +91 ${_phoneController.text.replaceAll(RegExp(r'\D'), '')}"
                       : "Enter your phone number to receive an OTP",
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+                  style: TextStyle(color: secondaryTextColor, fontSize: 15),
                 ),
                 const SizedBox(height: 32),
 
                 if (_errorMessage != null) ...[
-                  _ErrorBanner(message: _errorMessage!),
+                  _ErrorBanner(message: _errorMessage!, isDark: isDark),
                   const SizedBox(height: 16),
                 ],
 
                 if (!_otpSent) ...[
                   Text(
                     "Phone number",
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: secondaryTextColor),
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
@@ -223,28 +282,43 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                     validator: Validators.validatePhone,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     maxLength: 10,
-                    style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
+                    style: TextStyle(fontSize: 15, color: textColor),
                     decoration: InputDecoration(
                       hintText: "98765 43210",
-                      hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.6), fontSize: 14),
+                      hintStyle: TextStyle(color: secondaryTextColor.withOpacity(0.6), fontSize: 14),
                       prefixIcon: Padding(
                         padding: const EdgeInsets.only(left: 16, right: 8),
                         child: Text(
                           "+91",
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor),
                         ),
                       ),
                       prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
                       filled: true,
-                      fillColor: const Color(0xFFF7F8FA),
+                      fillColor: cardColor,
                       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                       counterText: "",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.border)),
-                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.primary, width: 1.6)),
-                      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.error, width: 1.4)),
-                      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.error, width: 1.6)),
-                      errorStyle: TextStyle(color: AppColors.error, fontSize: 12),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: borderColor)
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: borderColor)
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 1.6)
+                      ),
+                      errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: AppColors.error, width: 1.4)
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: AppColors.error, width: 1.6)
+                      ),
+                      errorStyle: const TextStyle(color: AppColors.error, fontSize: 12),
                     ),
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
@@ -293,23 +367,23 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
+                            color: textColor,
                           ),
                           decoration: InputDecoration(
                             counterText: "",
                             filled: true,
-                            fillColor: const Color(0xFFF7F8FA),
+                            fillColor: cardColor,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(color: AppColors.border),
+                              borderSide: BorderSide(color: borderColor),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(color: AppColors.border),
+                              borderSide: BorderSide(color: borderColor),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(color: AppColors.primary, width: 1.8),
+                              borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
                             ),
                           ),
                           inputFormatters: [
@@ -328,7 +402,7 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                     children: [
                       Text(
                         'Expires in ${_otpExpirySeconds ~/ 60}:${(_otpExpirySeconds % 60).toString().padLeft(2, '0')}',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        style: TextStyle(color: secondaryTextColor, fontSize: 13),
                       ),
                       TextButton(
                         style: TextButton.styleFrom(
@@ -384,7 +458,12 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
-  const _ErrorBanner({required this.message});
+  final bool isDark;
+
+  const _ErrorBanner({
+    required this.message,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -399,9 +478,18 @@ class _ErrorBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
+          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
           const SizedBox(width: 10),
-          Expanded(child: Text(message, style: TextStyle(color: AppColors.error, fontSize: 13, height: 1.3))),
+          Expanded(
+            child: Text(
+                message,
+                style: const TextStyle(
+                    color: AppColors.error,
+                    fontSize: 13,
+                    height: 1.3
+                )
+            ),
+          ),
         ],
       ),
     );

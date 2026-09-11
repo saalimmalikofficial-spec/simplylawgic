@@ -1,7 +1,9 @@
 // lib/screens/tests/test_attempt_screen.dart
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:simplylawgic/services/api_service.dart';
+import 'package:simplylawgic/utils/app_colors.dart';
+import 'dart:async';
 
 class TestAttemptScreen extends StatefulWidget {
   final String seriesSlug;
@@ -60,7 +62,6 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
         widget.testId,
       );
 
-      // Check if test is already submitted
       if (data['status'] == 'submitted' || data['status'] == 'completed') {
         setState(() {
           _isTestSubmitted = true;
@@ -102,6 +103,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
       setState(() {
         if (_remainingSeconds > 0) {
           _remainingSeconds--;
@@ -144,7 +146,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     try {
       await _apiService.syncAnswers(attemptId, answersToSync);
     } catch (e) {
-      print('Sync error: $e');
+      debugPrint('Sync error: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -157,9 +159,10 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   void _autoSubmitTest() {
     if (_isTestSubmitted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('⏰ Time\'s up! Auto-submitting test...'),
-        backgroundColor: Colors.red,
+      SnackBar(
+        content: const Text('Time expired! Auto-submitting test...'),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
       ),
     );
     _submitTestAttempt();
@@ -168,13 +171,32 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   void _selectOption(String questionId, String optionKey) {
     if (_isTestSubmitted) return;
 
+    HapticFeedback.lightImpact();
+
     setState(() {
       final index = _answers.indexWhere((a) => a['questionId'] == questionId);
       if (index != -1) {
-        _answers[index]['selectedOption'] = optionKey;
+        if (_answers[index]['selectedOption'] == optionKey) {
+          _answers[index]['selectedOption'] = '';
+          _submitAnswer(questionId, '');
+        } else {
+          _answers[index]['selectedOption'] = optionKey;
+          _submitAnswer(questionId, optionKey);
+        }
       }
     });
-    _submitAnswer(questionId, optionKey);
+  }
+
+  void _clearSelection(String questionId) {
+    if (_isTestSubmitted) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      final index = _answers.indexWhere((a) => a['questionId'] == questionId);
+      if (index != -1) {
+        _answers[index]['selectedOption'] = '';
+      }
+    });
+    _submitAnswer(questionId, '');
   }
 
   Future<void> _submitAnswer(String questionId, String optionKey) async {
@@ -184,12 +206,14 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       final attemptId = _attemptData?['attemptId'] ?? '';
       await _apiService.submitAnswer(attemptId, questionId, optionKey);
     } catch (e) {
-      // Handle error silently
+      // Handled quietly
     }
   }
 
   void _toggleMarkQuestion(String questionId) {
     if (_isTestSubmitted) return;
+
+    HapticFeedback.selectionClick();
 
     setState(() {
       if (_markedQuestions.contains(questionId)) {
@@ -209,7 +233,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       final marked = _markedQuestions.contains(questionId);
       await _apiService.markQuestion(attemptId, questionId, marked);
     } catch (e) {
-      // Handle error
+      // Handled quietly
     }
   }
 
@@ -233,78 +257,181 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     return _answers.where((a) => a['selectedOption']?.isNotEmpty ?? false).length;
   }
 
-  void _goToPreviousQuestion() {
-    if (_currentQuestionIndex > 0) {
-      setState(() {
-        _currentQuestionIndex--;
-      });
-    }
-  }
-
-  void _goToNextQuestion() {
-    if (_currentQuestionIndex < _questions.length - 1) {
-      setState(() {
-        _currentQuestionIndex++;
-      });
-    }
-  }
-
   void _submitTest() {
-    if (_isTestSubmitted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This test has already been submitted.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
+    if (_isTestSubmitted) return;
 
     final answeredCount = _getAnsweredCount();
+    final totalQuestions = _questions.length;
+    final unattempted = totalQuestions - answeredCount;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dialogBg = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+    final dialogText = isDark ? Colors.white : AppColors.textDark;
+    final dialogSubtext = isDark ? Colors.white70 : AppColors.textSecondary;
+    final dialogBorder = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+
     showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Submit Test'),
-        content: Text(
-          'You have answered $answeredCount out of ${_questions.length} questions.\n\nAre you sure you want to submit?',
-        ),
+      builder: (context) => Dialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+        elevation: 4,
+        backgroundColor: dialogBg,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.assignment_turned_in_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Submit Test',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: dialogText,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Are you sure you want to finish and submit your test attempt?',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: dialogSubtext,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0A0A0F) : AppColors.bg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: dialogBorder),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatItem('Answered', '$answeredCount', AppColors.secondary),
+                    ),
+                    Container(width: 1, height: 32, color: dialogBorder),
+                    Expanded(
+                      child: _buildStatItem('Unattempted', '$unattempted', AppColors.danger),
+                    ),
+                    Container(width: 1, height: 32, color: dialogBorder),
+                    Expanded(
+                      child: _buildStatItem('Marked', '${_markedQuestions.length}', Colors.amber.shade800),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: dialogBorder),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          foregroundColor: dialogText,
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          'Review',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.secondary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _submitTestAttempt();
+                        },
+                        child: const Text(
+                          'Submit Now',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C5CE7),
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-              _submitTestAttempt();
-            },
-            child: const Text(
-              'Submit',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  void _submitTestAttempt() async {
-    if (_isTestSubmitted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Test already submitted.'),
-          backgroundColor: Colors.orange,
+  Widget _buildStatItem(String label, String count, Color color) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          count,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            color: color,
+          ),
         ),
-      );
-      return;
-    }
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textMuted,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _submitTestAttempt() async {
+    if (_isTestSubmitted) return;
 
     setState(() {
       _isLoading = true;
@@ -327,294 +454,359 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Test submitted successfully!'),
-            backgroundColor: Colors.green,
+            content: Text('Test submitted successfully!'),
+            backgroundColor: AppColors.secondary,
+            behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       final errorMsg = e.toString().replaceFirst('Exception: ', '');
 
-      if (errorMsg.contains('already submitted')) {
-        setState(() {
+      setState(() {
+        _isLoading = false;
+        if (errorMsg.contains('already submitted')) {
           _isTestSubmitted = true;
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Test already submitted.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      } else {
-        setState(() {
-          _isLoading = false;
-        });
+        }
+      });
+
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $errorMsg'),
-            backgroundColor: Colors.red,
+            content: Text(errorMsg),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     }
   }
 
+  void _showQuestionPalette() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF1A1A2E) : AppColors.bg;
+    final textColor = isDark ? Colors.white : AppColors.textDark;
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          maxChildSize: 0.85,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: borderColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Question Palette',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close_rounded, size: 20, color: textColor),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildPaletteLegend(AppColors.secondary, 'Answered'),
+                      _buildPaletteLegend(Colors.amber.shade800, 'Marked'),
+                      _buildPaletteLegend(
+                        bgColor,
+                        'Unanswered',
+                        textColor: textColor,
+                        border: borderColor,
+                      ),
+                    ],
+                  ),
+                  Divider(height: 24, color: borderColor),
+                  Expanded(
+                    child: GridView.builder(
+                      controller: scrollController,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 5,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 1,
+                      ),
+                      itemCount: _questions.length,
+                      itemBuilder: (context, index) {
+                        final qId = _questions[index]['_id'] ?? '';
+                        final isAnswered = _isQuestionAnswered(qId);
+                        final isMarked = _isQuestionMarked(qId);
+                        final isCurrent = index == _currentQuestionIndex;
+
+                        Color bg = bgColor;
+                        Color textClr = textColor;
+                        Border border = Border.all(color: borderColor);
+
+                        if (isAnswered) {
+                          bg = AppColors.secondary;
+                          textClr = Colors.white;
+                          border = Border.all(color: AppColors.secondary);
+                        } else if (isMarked) {
+                          bg = Colors.amber.shade800;
+                          textClr = Colors.white;
+                          border = Border.all(color: Colors.amber.shade800);
+                        }
+
+                        return InkWell(
+                          onTap: () {
+                            setState(() => _currentQuestionIndex = index);
+                            Navigator.pop(context);
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            decoration: BoxDecoration(
+                              color: bg,
+                              borderRadius: BorderRadius.circular(10),
+                              border: isCurrent
+                                  ? Border.all(color: AppColors.primary, width: 2.5)
+                                  : border,
+                              boxShadow: isCurrent
+                                  ? [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.3),
+                                  blurRadius: 6,
+                                )
+                              ]
+                                  : null,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${index + 1}',
+                                style: TextStyle(
+                                  color: textClr,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPaletteLegend(Color color, String label, {Color textColor = Colors.white, Color? border}) {
+    return Row(
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+            border: border != null ? Border.all(color: border) : null,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: textColor == Colors.white ? AppColors.textSecondary : textColor,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        if (_isTestSubmitted) {
-          return true;
-        }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF0A0A0F) : AppColors.bg;
+    final cardColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final textColor = isDark ? Colors.white : AppColors.textDark;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final appBarBg = isDark ? const Color(0xFF12121E) : AppColors.background;
 
-        showDialog(
+    return PopScope(
+      canPop: _isTestSubmitted,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        final shouldPop = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Exit Test'),
-            content: const Text('Are you sure you want to exit? Your progress will be saved.'),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+            title: Text(
+              'Exit Test?',
+              style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+            ),
+            content: Text(
+              'Your progress is saved dynamically. Are you sure you want to exit?',
+              style: TextStyle(fontSize: 13, color: secondaryTextColor),
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Continue Test'),
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Resume', style: TextStyle(color: AppColors.primary)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pop(context);
-                },
-                child: const Text(
-                  'Exit',
-                  style: TextStyle(color: Colors.white),
-                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Exit Test'),
               ),
             ],
           ),
         );
-        return false;
+
+        if (shouldPop == true && context.mounted) {
+          Navigator.pop(context);
+        }
       },
       child: Scaffold(
-        backgroundColor: Colors.grey.shade50,
+        backgroundColor: bgColor,
         appBar: AppBar(
+          backgroundColor: appBarBg,
+          elevation: 0.5,
+          leading: IconButton(
+            icon: Icon(Icons.close_rounded, color: textColor),
+            onPressed: () => Navigator.maybePop(context),
+          ),
           title: Text(
-            _isTestSubmitted ? 'Test Submitted' : widget.testTitle,
-            style: const TextStyle(
+            _isTestSubmitted ? 'Test Result' : widget.testTitle,
+            style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
-              color: Colors.black87,
+              color: textColor,
             ),
           ),
           centerTitle: true,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
           actions: [
             if (_isSyncing)
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6C5CE7)),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: isDark ? Colors.white : AppColors.primary,
+                    ),
                   ),
                 ),
               ),
-            if (!_isTestSubmitted)
+            if (!_isTestSubmitted && !_isLoading && _questions.isNotEmpty)
               IconButton(
-                icon: const Icon(Icons.flag_outlined),
-                onPressed: _submitTest,
+                icon: Icon(Icons.grid_view_rounded, color: isDark ? Colors.white : AppColors.primary),
+                onPressed: _showQuestionPalette,
               ),
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(
+          child: CircularProgressIndicator(
+            color: isDark ? Colors.white : AppColors.primary,
+          ),
+        )
             : _isTestSubmitted
-            ? _buildSubmittedView()
+            ? _buildSubmittedView(isDark)
             : _errorMessage != null
-            ? _buildErrorView()
+            ? _buildErrorView(isDark)
             : _questions.isEmpty
-            ? _buildEmptyView()
+            ? Center(
+          child: Text(
+            'No questions available',
+            style: TextStyle(color: secondaryTextColor),
+          ),
+        )
             : Column(
           children: [
-            _buildHeader(),
-            Expanded(
-              child: _buildQuestionView(),
-            ),
-            _buildNavigationButtons(),
+            _buildHeader(isDark),
+            Expanded(child: _buildQuestionView(isDark, cardColor, borderColor, textColor, secondaryTextColor)),
+            _buildBottomNavigation(isDark, textColor, borderColor),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSubmittedView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.green.shade50,
-              ),
-              child: Icon(
-                Icons.check_circle,
-                size: 80,
-                color: Colors.green.shade700,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              '✅ Test Submitted!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.green.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your test has been submitted successfully.',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'You answered ${_getAnsweredCount()} out of ${_questions.length} questions.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade500,
-              ),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: 200,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C5CE7),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'Go Back',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildHeader(bool isDark) {
+    final isLowTime = _remainingSeconds < 300;
+    final timerColor = isLowTime ? AppColors.danger : AppColors.secondary;
+    final timerBg = isLowTime ? AppColors.danger.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1);
+    final timerBorder = isLowTime ? AppColors.danger.withOpacity(0.3) : AppColors.secondary.withOpacity(0.3);
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
 
-  Widget _buildErrorView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 80,
-              color: Colors.red.shade300,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _errorMessage!,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _startTest,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 12,
-                ),
-              ),
-              child: const Text(
-                'Retry',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyView() {
-    return const Center(
-      child: Text('No questions available'),
-    );
-  }
-
-  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A2E) : AppColors.background,
+        border: Border(bottom: BorderSide(color: borderColor)),
+      ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 6,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: _remainingSeconds < 300 ? Colors.red.shade50 : Colors.green.shade50,
+              color: timerBg,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: _remainingSeconds < 300 ? Colors.red.shade200 : Colors.green.shade200,
-              ),
+              border: Border.all(color: timerBorder),
             ),
             child: Row(
               children: [
                 Icon(
-                  Icons.timer,
-                  size: 18,
-                  color: _remainingSeconds < 300 ? Colors.red : Colors.green,
+                  Icons.timer_outlined,
+                  size: 16,
+                  color: timerColor,
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 Text(
                   _formatTime(_remainingSeconds),
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: _remainingSeconds < 300 ? Colors.red : Colors.green,
+                    color: timerColor,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ],
@@ -622,45 +814,28 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
           ),
           const Spacer(),
           Text(
-            '${_currentQuestionIndex + 1}/${_questions.length}',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey,
+            'Question ${_currentQuestionIndex + 1} of ${_questions.length}',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white38 : AppColors.textMuted,
             ),
           ),
-          const SizedBox(width: 16),
-          if (_markedQuestions.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '📌 ${_markedQuestions.length}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.orange.shade700,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildQuestionView() {
+  Widget _buildQuestionView(bool isDark, Color cardColor, Color borderColor, Color textColor, Color secondaryTextColor) {
     final question = _questions[_currentQuestionIndex];
     final questionId = question['_id'] ?? '';
     final selectedOption = _getSelectedOption(questionId);
     final isMarked = _isQuestionMarked(questionId);
+    final options = List.from(question['options'] ?? []);
+    final marksColor = isDark ? Colors.white70 : AppColors.primary;
 
     return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -668,73 +843,60 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6C5CE7),
-                  borderRadius: BorderRadius.circular(20),
+                  color: isDark ? Colors.white.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  'Q${_currentQuestionIndex + 1}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Text(
-                  '${question['marks'] ?? 0} marks',
+                  '+${question['marks'] ?? 0} Marks',
                   style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.blue.shade700,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                    color: marksColor,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
               const Spacer(),
-              GestureDetector(
-                onTap: () => _toggleMarkQuestion(questionId),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
+              if (selectedOption.isNotEmpty)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
+                  onPressed: () => _clearSelection(questionId),
+                  icon: const Icon(Icons.clear_rounded, size: 14, color: AppColors.danger),
+                  label: const Text(
+                    'Clear Selection',
+                    style: TextStyle(fontSize: 12, color: AppColors.danger),
+                  ),
+                ),
+              const SizedBox(width: 12),
+              InkWell(
+                onTap: () => _toggleMarkQuestion(questionId),
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: isMarked ? Colors.orange.shade100 : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isMarked ? Colors.orange : Colors.grey.shade300,
-                    ),
+                    color: isMarked ? (isDark ? const Color(0xFF2D1F0A) : Colors.amber.shade50) : cardColor,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: isMarked ? Colors.amber.shade700 : borderColor),
                   ),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.flag,
-                        size: 16,
-                        color: isMarked ? Colors.orange : Colors.grey,
+                        isMarked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                        size: 15,
+                        color: isMarked ? Colors.amber.shade800 : (isDark ? Colors.white38 : AppColors.textMuted),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         isMarked ? 'Marked' : 'Mark',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isMarked ? Colors.orange : Colors.grey,
-                          fontWeight: FontWeight.w500,
+                          color: isMarked ? Colors.amber.shade800 : (isDark ? Colors.white38 : AppColors.textMuted),
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -744,69 +906,209 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            question['text'] ?? '',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 20),
-          ...List.generate(
-            (question['options'] as List).length,
-                (index) {
-              final option = question['options'][index];
-              final optionKey = option['key'] ?? '';
-              final isSelected = selectedOption == optionKey;
-
-              return _buildOptionTile(
-                optionKey: optionKey,
-                text: option['text'] ?? '',
-                isSelected: isSelected,
-                onTap: () => _selectOption(questionId, optionKey),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.all(12),
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: _isQuestionAnswered(questionId)
-                  ? Colors.green.shade50
-                  : Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: _isQuestionAnswered(questionId)
-                    ? Colors.green.shade200
-                    : Colors.grey.shade200,
+              color: cardColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Text(
+              question['text'] ?? '',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+                height: 1.5,
               ),
             ),
+          ),
+          const SizedBox(height: 20),
+          ...List.generate(options.length, (index) {
+            final option = options[index];
+            final optionKey = option['key'] ?? '';
+            final isSelected = selectedOption == optionKey;
+
+            return _buildOptionCard(
+              optionKey: optionKey,
+              text: option['text'] ?? '',
+              isSelected: isSelected,
+              isDark: isDark,
+              cardColor: cardColor,
+              borderColor: borderColor,
+              textColor: textColor,
+              onTap: () => _selectOption(questionId, optionKey),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionCard({
+    required String optionKey,
+    required String text,
+    required bool isSelected,
+    required bool isDark,
+    required Color cardColor,
+    required Color borderColor,
+    required Color textColor,
+    required VoidCallback onTap,
+  }) {
+    final primaryColor = AppColors.primary;
+    final optionBg = isSelected
+        ? primaryColor.withOpacity(0.08)
+        : cardColor;
+    final optionBorder = isSelected
+        ? primaryColor
+        : borderColor;
+    final optionBorderWidth = isSelected ? 2.0 : 1.0;
+    final optionTextColor = isSelected ? primaryColor : textColor;
+    final optionWeight = isSelected ? FontWeight.w600 : FontWeight.normal;
+    final circleBg = isSelected ? primaryColor : (isDark ? const Color(0xFF0A0A0F) : AppColors.bg);
+    final circleBorder = isSelected ? primaryColor : borderColor;
+    final circleTextColor = isSelected ? Colors.white : (isDark ? Colors.white70 : AppColors.textSecondary);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: optionBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: optionBorder,
+          width: optionBorderWidth,
+        ),
+        boxShadow: isSelected
+            ? [
+          BoxShadow(
+            color: primaryColor.withOpacity(0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ]
+            : [],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                Icon(
-                  _isQuestionAnswered(questionId)
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: _isQuestionAnswered(questionId)
-                      ? Colors.green
-                      : Colors.grey,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _isQuestionAnswered(questionId)
-                      ? 'Answered'
-                      : 'Not Answered',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: _isQuestionAnswered(questionId)
-                        ? Colors.green.shade700
-                        : Colors.grey.shade600,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: circleBg,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: circleBorder),
+                  ),
+                  child: Center(
+                    child: Text(
+                      optionKey,
+                      style: TextStyle(
+                        color: circleTextColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                 ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: optionTextColor,
+                      fontWeight: optionWeight,
+                    ),
+                  ),
+                ),
+                if (isSelected)
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigation(bool isDark, Color textColor, Color borderColor) {
+    final isLastQuestion = _currentQuestionIndex == _questions.length - 1;
+    final bgColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
+    final btnBg = isLastQuestion ? AppColors.secondary : AppColors.primary;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.white.withOpacity(0.03) : Colors.black12,
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          )
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: borderColor),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _currentQuestionIndex > 0
+                    ? () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _currentQuestionIndex--);
+                }
+                    : null,
+                child: Text(
+                  'Previous',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: btnBg,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  if (isLastQuestion) {
+                    _submitTest();
+                  } else {
+                    setState(() => _currentQuestionIndex++);
+                  }
+                },
+                child: Text(
+                  isLastQuestion ? 'Submit Test' : 'Next Question',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
             ),
           ),
         ],
@@ -814,156 +1116,106 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     );
   }
 
-  Widget _buildOptionTile({
-    required String optionKey,
-    required String text,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6C5CE7).withOpacity(0.1) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF6C5CE7) : Colors.grey.shade300,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
+  Widget _buildSubmittedView(bool isDark) {
+    final textColor = isDark ? Colors.white : AppColors.textDark;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final circleBg = isDark ? const Color(0xFF1A3A1A) : AppColors.secondary.withOpacity(0.1);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 28,
-              height: 28,
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
+                color: circleBg,
                 shape: BoxShape.circle,
-                color: isSelected ? const Color(0xFF6C5CE7) : Colors.grey.shade200,
               ),
-              child: Center(
-                child: Text(
-                  optionKey,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.grey.shade700,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                size: 72,
+                color: AppColors.secondary,
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isSelected ? const Color(0xFF6C5CE7) : Colors.black87,
-                ),
+            const SizedBox(height: 24),
+            Text(
+              'Test Submitted Successfully!',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: textColor,
               ),
             ),
-            if (isSelected)
-              const Icon(
-                Icons.check_circle,
-                color: Color(0xFF6C5CE7),
-                size: 20,
+            const SizedBox(height: 8),
+            Text(
+              'You completed ${_getAnsweredCount()} out of ${_questions.length} questions.',
+              style: TextStyle(fontSize: 14, color: secondaryTextColor),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? Colors.white : AppColors.primary,
+                  foregroundColor: isDark ? const Color(0xFF0A0A0F) : Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Back to Home', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNavigationButtons() {
-    if (_isTestSubmitted) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        color: Colors.white,
-        child: SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C5CE7),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Go Back',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+  Widget _buildErrorView(bool isDark) {
+    final textColor = isDark ? Colors.white : AppColors.textDark;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey.shade200,
-                foregroundColor: Colors.black87,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onPressed: _currentQuestionIndex > 0 ? _goToPreviousQuestion : null,
-              child: const Text('Previous'),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 56,
+              color: isDark ? const Color(0xFFEF5350) : AppColors.danger,
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _currentQuestionIndex == _questions.length - 1
-                ? ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onPressed: _submitTest,
-              child: const Text(
-                'Submit',
-                style: TextStyle(color: Colors.white),
-              ),
-            )
-                : ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onPressed: _goToNextQuestion,
-              child: const Text(
-                'Next',
-                style: TextStyle(color: Colors.white),
-              ),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage ?? 'Failed to load test attempt',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: secondaryTextColor, fontSize: 14),
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _startTest,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDark ? Colors.white : AppColors.primary,
+                foregroundColor: isDark ? const Color(0xFF0A0A0F) : Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   String _formatTime(int seconds) {
-    int hours = seconds ~/ 3600;
-    int minutes = (seconds % 3600) ~/ 60;
-    int remainingSeconds = seconds % 60;
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final remainingSeconds = seconds % 60;
 
     if (hours > 0) {
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';

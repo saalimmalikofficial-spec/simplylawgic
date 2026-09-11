@@ -7,15 +7,24 @@ class BatchesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // No nested Scaffold — this tab lives inside the dashboard's Scaffold
-    // (bottom nav). Wrapping it again would cause background flashes /
-    // double safe-area padding.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF0A0A0F) : AppColors.background;
+    final textColor = isDark ? Colors.white : AppColors.textPrimary;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final cardColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final shadowColor = isDark ? Colors.white.withOpacity(0.03) : AppColors.textPrimary.withOpacity(0.05);
+
     return Container(
-      color: AppColors.background,
+      color: backgroundColor,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
         children: [
-          const _LedgerHeader(label: "Enrolled Files"),
+          _LedgerHeader(
+            label: "Enrolled Files",
+            isDark: isDark,
+            textColor: textColor,
+          ),
           const SizedBox(height: 14),
 
           _EnrolledBatchFile(
@@ -23,15 +32,23 @@ class BatchesTab extends StatelessWidget {
             title: "Judiciary Master Preparation Batch 2026",
             subtitle: "Live Classes • Major Laws • Daily Tests",
             expiryLabel: "VALID · 8 MONTHS LEFT",
-            onTap: () => _toast(context, 'Redirecting to live class...'),
+            isDark: isDark,
+            cardColor: cardColor,
+            borderColor: borderColor,
+            shadowColor: shadowColor,
+            textColor: textColor,
+            secondaryTextColor: secondaryTextColor,
+            onTap: () => _toast(context, 'Redirecting to live class...', isDark),
           ),
 
           const SizedBox(height: 32),
 
           _LedgerHeader(
             label: "Explore New Batches",
+            isDark: isDark,
+            textColor: textColor,
             trailing: TextButton(
-              onPressed: () => _toast(context, 'More batches coming soon!'),
+              onPressed: () => _toast(context, 'More batches coming soon!', isDark),
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
                 minimumSize: const Size(0, 0),
@@ -63,7 +80,13 @@ class BatchesTab extends StatelessWidget {
             subtitle: "Covers Civil & Criminal Laws with Answer Writing",
             startDate: "Starts 15 Aug",
             price: "₹14,999",
-            onEnroll: () => _toast(context, 'Enrolling in Comprehensive Law Foundation 2026...'),
+            isDark: isDark,
+            cardColor: cardColor,
+            borderColor: borderColor,
+            shadowColor: shadowColor,
+            textColor: textColor,
+            secondaryTextColor: secondaryTextColor,
+            onEnroll: () => _toast(context, 'Enrolling in Comprehensive Law Foundation 2026...', isDark),
           ),
           const SizedBox(height: 14),
           _ExploreBatchFile(
@@ -73,30 +96,43 @@ class BatchesTab extends StatelessWidget {
             subtitle: "30-Day Intensive Revision for Judiciary Exams",
             startDate: "Starts 01 Sept",
             price: "₹4,999",
-            onEnroll: () => _toast(context, 'Enrolling in Minor Laws & Local Acts Crash Course...'),
+            isDark: isDark,
+            cardColor: cardColor,
+            borderColor: borderColor,
+            shadowColor: shadowColor,
+            textColor: textColor,
+            secondaryTextColor: secondaryTextColor,
+            onEnroll: () => _toast(context, 'Enrolling in Minor Laws & Local Acts Crash Course...', isDark),
           ),
         ],
       ),
     );
   }
 
-  static void _toast(BuildContext context, String msg) {
+  static void _toast(BuildContext context, String msg, bool isDark) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
+        backgroundColor: isDark ? const Color(0xFF1A1A2E) : null,
       ),
     );
   }
 }
 
-/// Small "ledger" style section header — an eyebrow label with a hairline
-/// rule, evoking a docket/file-index heading rather than a plain title.
 class _LedgerHeader extends StatelessWidget {
   final String label;
   final Widget? trailing;
-  const _LedgerHeader({required this.label, this.trailing});
+  final bool isDark;
+  final Color textColor;
+
+  const _LedgerHeader({
+    required this.label,
+    this.trailing,
+    required this.isDark,
+    required this.textColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -108,12 +144,15 @@ class _LedgerHeader extends StatelessWidget {
             fontSize: 13,
             fontWeight: FontWeight.w800,
             letterSpacing: 1.1,
-            color: AppColors.textPrimary,
+            color: textColor,
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Container(height: 1, color: AppColors.border),
+          child: Container(
+            height: 1,
+            color: isDark ? Colors.white.withOpacity(0.06) : AppColors.border,
+          ),
         ),
         if (trailing != null) ...[
           const SizedBox(width: 10),
@@ -124,8 +163,6 @@ class _LedgerHeader extends StatelessWidget {
   }
 }
 
-/// Thin dashed rule — used instead of a plain Divider to read like a
-/// ruled line on a legal document.
 class _DashedRule extends StatelessWidget {
   final Color color;
   const _DashedRule({this.color = const Color(0x00000000)});
@@ -155,14 +192,17 @@ class _DashedRule extends StatelessWidget {
   }
 }
 
-/// The enrolled batch, styled as an open case file: a rotated tab strip
-/// on the left carries the status, and the expiry reads like a stamped
-/// docket entry.
 class _EnrolledBatchFile extends StatelessWidget {
   final String status;
   final String title;
   final String subtitle;
   final String expiryLabel;
+  final bool isDark;
+  final Color cardColor;
+  final Color borderColor;
+  final Color shadowColor;
+  final Color textColor;
+  final Color secondaryTextColor;
   final VoidCallback onTap;
 
   const _EnrolledBatchFile({
@@ -170,6 +210,12 @@ class _EnrolledBatchFile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.expiryLabel,
+    required this.isDark,
+    required this.cardColor,
+    required this.borderColor,
+    required this.shadowColor,
+    required this.textColor,
+    required this.secondaryTextColor,
     required this.onTap,
   });
 
@@ -177,12 +223,12 @@ class _EnrolledBatchFile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: AppColors.textPrimary.withOpacity(0.05),
+            color: shadowColor,
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -192,8 +238,6 @@ class _EnrolledBatchFile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Folder tab strip — minHeight keeps it visible even if content
-          // is short; it stretches automatically once content is taller.
           Container(
             width: 34,
             constraints: const BoxConstraints(minHeight: 130),
@@ -225,21 +269,23 @@ class _EnrolledBatchFile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: textColor,
                       height: 1.25,
                     ),
                   ),
                   const SizedBox(height: 5),
                   Text(
                     subtitle,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    style: TextStyle(
+                      color: secondaryTextColor,
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  _DashedRule(color: AppColors.border),
+                  _DashedRule(color: borderColor),
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      // Rubber-stamp style expiry chip
                       Transform.rotate(
                         angle: -0.035,
                         child: Container(
@@ -298,8 +344,6 @@ class _EnrolledBatchFile extends StatelessWidget {
   }
 }
 
-/// An explore-batch card styled with a folded-corner ribbon badge instead
-/// of a plain pill, and a dashed rule separating info from price/CTA.
 class _ExploreBatchFile extends StatelessWidget {
   final String ribbonText;
   final Color ribbonColor;
@@ -307,6 +351,12 @@ class _ExploreBatchFile extends StatelessWidget {
   final String subtitle;
   final String startDate;
   final String price;
+  final bool isDark;
+  final Color cardColor;
+  final Color borderColor;
+  final Color shadowColor;
+  final Color textColor;
+  final Color secondaryTextColor;
   final VoidCallback onEnroll;
 
   const _ExploreBatchFile({
@@ -316,6 +366,12 @@ class _ExploreBatchFile extends StatelessWidget {
     required this.subtitle,
     required this.startDate,
     required this.price,
+    required this.isDark,
+    required this.cardColor,
+    required this.borderColor,
+    required this.shadowColor,
+    required this.textColor,
+    required this.secondaryTextColor,
     required this.onEnroll,
   });
 
@@ -323,12 +379,12 @@ class _ExploreBatchFile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: AppColors.textPrimary.withOpacity(0.05),
+            color: shadowColor,
             blurRadius: 12,
             offset: const Offset(0, 5),
           ),
@@ -345,13 +401,20 @@ class _ExploreBatchFile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const SizedBox(width: 84), // keep clear of the ribbon
+                    const SizedBox(width: 84),
                     const Spacer(),
-                    Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.textSecondary),
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: 13,
+                      color: secondaryTextColor,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       startDate,
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: secondaryTextColor,
+                      ),
                     ),
                   ],
                 ),
@@ -361,16 +424,19 @@ class _ExploreBatchFile extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+                    color: textColor,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: secondaryTextColor,
+                  ),
                 ),
                 const SizedBox(height: 14),
-                _DashedRule(color: AppColors.border),
+                _DashedRule(color: borderColor),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -414,14 +480,11 @@ class _ExploreBatchFile extends StatelessWidget {
               ],
             ),
           ),
-          // Folded-corner ribbon badge — fixed size + FittedBox so any
-          // label length ("POPULAR" or "CRASH COURSE") scales to fit
-          // instead of clipping against the card's rounded corner.
           Positioned(
             top: 14,
             left: -30,
             child: Transform.rotate(
-              angle: -0.7853981634, // -45deg
+              angle: -0.7853981634,
               child: Container(
                 width: 110,
                 height: 22,

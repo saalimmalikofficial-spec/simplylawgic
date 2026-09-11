@@ -1,5 +1,6 @@
 // lib/screens/auth/sign_in_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:simplylawgic/services/api_service.dart';
 import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/utils/validators.dart';
@@ -41,9 +42,10 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Trim both email and password before sending
       final response = await _apiService.signIn(
         _emailController.text.trim(),
-        _passwordController.text,
+        _passwordController.text.trim(),
       );
 
       await _storage.saveToken(response.token);

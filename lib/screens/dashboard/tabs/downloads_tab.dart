@@ -4,13 +4,10 @@ import 'package:simplylawgic/utils/app_colors.dart';
 
 enum DownloadFileType { pdf, video, doc }
 
-// TODO: move to lib/models/download_item.dart once downloads have a real
-// backend/local-storage layer — this is a placeholder model for now,
-// same pattern TestSeries follows in models/test_series.dart.
 class DownloadItem {
   final String id;
   final String title;
-  final String category; // e.g. "Major Laws", "Minor Laws", "Judiciary Prep"
+  final String category;
   final DownloadFileType type;
   final double sizeMb;
   final DateTime downloadedAt;
@@ -33,8 +30,6 @@ class DownloadsTab extends StatefulWidget {
 }
 
 class _DownloadsTabState extends State<DownloadsTab> {
-  // TODO: replace with real downloaded-files data once download
-  // persistence (local storage / DB query) is wired up.
   final List<DownloadItem> _downloads = [
     DownloadItem(
       id: '1',
@@ -93,7 +88,7 @@ class _DownloadsTabState extends State<DownloadsTab> {
     return '$days days ago';
   }
 
-  Future<bool> _confirmDelete(DownloadItem item) async {
+  Future<bool> _confirmDelete(DownloadItem item, bool isDark) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -102,6 +97,7 @@ class _DownloadsTabState extends State<DownloadsTab> {
         contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
         actionsPadding: const EdgeInsets.fromLTRB(8, 0, 16, 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
         title: Row(
           children: [
             Container(
@@ -114,19 +110,35 @@ class _DownloadsTabState extends State<DownloadsTab> {
               child: Icon(Icons.delete_outline_rounded, color: Colors.red.shade600, size: 22),
             ),
             const SizedBox(width: 12),
-            const Expanded(
-              child: Text('Remove download?', style: TextStyle(fontSize: 17)),
+            Expanded(
+              child: Text(
+                'Remove download?',
+                style: TextStyle(
+                  fontSize: 17,
+                  color: isDark ? Colors.white : AppColors.textPrimary,
+                ),
+              ),
             ),
           ],
         ),
         content: Text(
           '"${item.title}" will be removed from your device. You can download it again anytime.',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13.5, height: 1.4),
+          style: TextStyle(
+            color: isDark ? Colors.white70 : AppColors.textSecondary,
+            fontSize: 13.5,
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: isDark ? Colors.white60 : AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
@@ -142,7 +154,7 @@ class _DownloadsTabState extends State<DownloadsTab> {
     return confirmed ?? false;
   }
 
-  void _removeDownload(DownloadItem item) {
+  void _removeDownload(DownloadItem item, bool isDark) {
     final index = _downloads.indexOf(item);
     setState(() => _downloads.remove(item));
 
@@ -151,6 +163,7 @@ class _DownloadsTabState extends State<DownloadsTab> {
         content: Text('Removed "${item.title}"'),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
+        backgroundColor: isDark ? const Color(0xFF1A1A2E) : null,
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () => setState(() => _downloads.insert(index.clamp(0, _downloads.length), item)),
@@ -161,17 +174,26 @@ class _DownloadsTabState extends State<DownloadsTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF0A0A0F) : AppColors.background;
+    final textColor = isDark ? Colors.white : AppColors.textPrimary;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final cardColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+    final shadowColor = isDark ? Colors.white.withOpacity(0.03) : AppColors.textPrimary.withOpacity(0.05);
+
     return Container(
-      color: AppColors.background,
+      color: backgroundColor,
       child: SafeArea(
         top: true,
         bottom: false,
-        child: _downloads.isEmpty ? _buildEmptyView() : _buildContent(),
+        child: _downloads.isEmpty
+            ? _buildEmptyView(isDark, secondaryTextColor)
+            : _buildContent(isDark, textColor, secondaryTextColor, cardColor, shadowColor),
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(bool isDark, Color textColor, Color secondaryTextColor, Color cardColor, Color shadowColor) {
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
@@ -180,6 +202,7 @@ class _DownloadsTabState extends State<DownloadsTab> {
             child: _StorageHeroCard(
               fileCount: _downloads.length,
               totalSizeMb: _totalSizeMb,
+              isDark: isDark,
             ),
           ),
         ),
@@ -187,21 +210,35 @@ class _DownloadsTabState extends State<DownloadsTab> {
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
           sliver: SliverList.builder(
             itemCount: _downloads.length,
-            itemBuilder: (context, i) => _buildDownloadTile(_downloads[i]),
+            itemBuilder: (context, i) => _buildDownloadTile(
+              _downloads[i],
+              isDark,
+              textColor,
+              secondaryTextColor,
+              cardColor,
+              shadowColor,
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDownloadTile(DownloadItem item) {
+  Widget _buildDownloadTile(
+      DownloadItem item,
+      bool isDark,
+      Color textColor,
+      Color secondaryTextColor,
+      Color cardColor,
+      Color shadowColor,
+      ) {
     final iconData = _iconFor(item.type);
 
     return Dismissible(
       key: ValueKey(item.id),
       direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => _confirmDelete(item),
-      onDismissed: (_) => _removeDownload(item),
+      confirmDismiss: (_) => _confirmDelete(item, isDark),
+      onDismissed: (_) => _removeDownload(item, isDark),
       background: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -215,11 +252,11 @@ class _DownloadsTabState extends State<DownloadsTab> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardColor,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: AppColors.textPrimary.withOpacity(0.05),
+              color: shadowColor,
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -253,16 +290,28 @@ class _DownloadsTabState extends State<DownloadsTab> {
                               item.title,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.25),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: textColor,
+                                height: 1.25,
+                              ),
                             ),
                             const SizedBox(height: 5),
                             Row(
                               children: [
-                                _MetaPill(text: item.category, color: iconData.color),
+                                _MetaPill(
+                                  text: item.category,
+                                  color: iconData.color,
+                                  isDark: isDark,
+                                ),
                                 const SizedBox(width: 6),
                                 Text(
                                   '${_formatSize(item.sizeMb)} · ${_formatDate(item.downloadedAt)}',
-                                  style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: secondaryTextColor,
+                                  ),
                                 ),
                               ],
                             ),
@@ -270,9 +319,13 @@ class _DownloadsTabState extends State<DownloadsTab> {
                         ),
                       ),
                       IconButton(
-                        icon: Icon(Icons.delete_outline_rounded, color: AppColors.textSecondary, size: 21),
+                        icon: Icon(
+                          Icons.delete_outline_rounded,
+                          color: secondaryTextColor,
+                          size: 21,
+                        ),
                         onPressed: () async {
-                          if (await _confirmDelete(item)) _removeDownload(item);
+                          if (await _confirmDelete(item, isDark)) _removeDownload(item, isDark);
                         },
                       ),
                     ],
@@ -286,7 +339,7 @@ class _DownloadsTabState extends State<DownloadsTab> {
     );
   }
 
-  Widget _buildEmptyView() {
+  Widget _buildEmptyView(bool isDark, Color secondaryTextColor) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
@@ -306,13 +359,21 @@ class _DownloadsTabState extends State<DownloadsTab> {
               const SizedBox(height: 20),
               Text(
                 'No Downloads Yet',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'PDFs, notes and videos you download for offline access will show up here',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.4),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: secondaryTextColor,
+                  height: 1.4,
+                ),
               ),
             ],
           ),
@@ -322,18 +383,24 @@ class _DownloadsTabState extends State<DownloadsTab> {
   }
 }
 
-/// Gradient hero card summarizing total downloaded files and space used.
 class _StorageHeroCard extends StatelessWidget {
   final int fileCount;
   final double totalSizeMb;
+  final bool isDark;
 
-  const _StorageHeroCard({required this.fileCount, required this.totalSizeMb});
+  const _StorageHeroCard({
+    required this.fileCount,
+    required this.totalSizeMb,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
     const capMb = 500.0;
     final progress = (totalSizeMb / capMb).clamp(0.0, 1.0);
-    final sizeLabel = totalSizeMb >= 1000 ? '${(totalSizeMb / 1000).toStringAsFixed(1)} GB' : '${totalSizeMb.toStringAsFixed(1)} MB';
+    final sizeLabel = totalSizeMb >= 1000
+        ? '${(totalSizeMb / 1000).toStringAsFixed(1)} GB'
+        : '${totalSizeMb.toStringAsFixed(1)} MB';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -360,17 +427,30 @@ class _StorageHeroCard extends StatelessWidget {
               children: [
                 const Text(
                   'OFFLINE LIBRARY',
-                  style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   '$fileCount ${fileCount == 1 ? 'file' : 'files'} saved',
-                  style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '$sizeLabel used offline',
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -401,11 +481,16 @@ class _StorageHeroCard extends StatelessWidget {
   }
 }
 
-/// Tiny category label pill next to the size/date meta line.
 class _MetaPill extends StatelessWidget {
   final String text;
   final Color color;
-  const _MetaPill({required this.text, required this.color});
+  final bool isDark;
+
+  const _MetaPill({
+    required this.text,
+    required this.color,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -417,7 +502,11 @@ class _MetaPill extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
       ),
     );
   }

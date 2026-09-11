@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/screens/auth/sign_in_screen.dart';
 import 'package:simplylawgic/screens/dashboard/dashboard_screen.dart';
+import 'package:simplylawgic/utils/app_colors.dart';
+import 'package:simplylawgic/main.dart'; // For themeManager
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -18,12 +20,35 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   late Animation<Offset> _slideAnimation;
 
   final StorageService _storage = StorageService();
-  bool _isCheckingAuth = false;
+  bool _isDarkMode = false;
 
   @override
   void initState() {
     super.initState();
+    _loadTheme();
+    _initAnimations();
+    _checkAuthentication();
+  }
 
+  void _loadTheme() {
+    // Load theme from storage
+    _storage.getThemePreference().then((isDark) {
+      if (mounted) {
+        setState(() {
+          _isDarkMode = isDark ?? false;
+        });
+        // ✅ Update global theme manager - setTheme available hai
+        if (isDark != null) {
+          themeManager.setTheme(isDark);
+        }
+      }
+    }).catchError((e) {
+      // ✅ Handle error if setTheme fails
+      debugPrint('Error loading theme: $e');
+    });
+  }
+
+  void _initAnimations() {
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -47,7 +72,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _animationController.forward();
-    _checkAuthentication();
   }
 
   @override
@@ -59,38 +83,24 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Future<void> _checkAuthentication() async {
     await Future.delayed(const Duration(milliseconds: 2000));
 
-    if (mounted) {
-      setState(() {
-        _isCheckingAuth = true;
-      });
-    }
+    if (!mounted) return;
 
     try {
       final String? token = await _storage.getToken();
       final bool isLoggedIn = token != null && token.isNotEmpty;
 
-      if (mounted) {
-        await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
 
-        if (isLoggedIn) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const DashboardScreen(),
-            ),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const SignInScreen(),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        await Future.delayed(const Duration(milliseconds: 300));
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      if (isLoggedIn) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const DashboardScreen(),
+          ),
+        );
+      } else {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -98,24 +108,63 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           ),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      await Future.delayed(const Duration(milliseconds: 300));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const SignInScreen(),
+        ),
+      );
     }
+  }
+
+  // Toggle theme from splash screen
+  void _toggleTheme() {
+    setState(() {
+      _isDarkMode = !_isDarkMode;
+    });
+    // ✅ toggleTheme available hai
+    themeManager.toggleTheme();
+    _storage.saveThemePreference(_isDarkMode);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = _isDarkMode;
+    final backgroundColor = isDark ? const Color(0xFF0A0A0F) : const Color(0xFFFFFFFF);
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subtitleColor = isDark ? Colors.white70 : Colors.black54;
+    final gradientColors = isDark
+        ? [
+      const Color(0xFF0A0A0F),
+      const Color(0xFF1A1A2E),
+      const Color(0xFF16213E),
+    ]
+        : [
+      const Color(0xFFFFFFFF),
+      const Color(0xFFF5F5F5),
+      const Color(0xFFE8E8E8),
+    ];
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: isDark
+          ? const SystemUiOverlayStyle(
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.light,
+      )
+          : const SystemUiOverlayStyle(
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.dark,
+      ),
       child: Scaffold(
         body: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                const Color(0xFFFFFFFF), // Dark blue top
-                const Color(0xFFFFFFFF), // Medium blue
-                const Color(0xFFFFFFFF), // Lighter blue bottom
-              ],
+              colors: gradientColors,
             ),
           ),
           child: Center(
@@ -133,10 +182,20 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       height: 120,
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.gavel,
-                          size: 100,
-                          color: Colors.white,
+                        return Container(
+                          height: 120,
+                          width: 120,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withOpacity(0.1)
+                                : Colors.grey.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.gavel,
+                            size: 60,
+                            color: isDark ? Colors.white70 : AppColors.primary,
+                          ),
                         );
                       },
                     ),
@@ -145,7 +204,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
                 const SizedBox(height: 20),
 
-                // App Name - Simple text
+                // App Name
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: Column(
@@ -155,7 +214,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black,
+                          color: textColor,
                           letterSpacing: 1.2,
                         ),
                       ),
@@ -164,12 +223,70 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         'Your Legal Companion',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.black,
+                          color: subtitleColor,
                           letterSpacing: 0.5,
                           fontWeight: FontWeight.w300,
                         ),
                       ),
                     ],
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Loading Indicator
+                SizedBox(
+                  height: 30,
+                  width: 30,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: isDark ? Colors.white : AppColors.primary,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      isDark ? Colors.white : AppColors.primary,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Theme Toggle Button
+                FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: GestureDetector(
+                    onTap: _toggleTheme,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.1)
+                            : Colors.black.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(25),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.2)
+                              : Colors.grey.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isDark ? Icons.light_mode : Icons.dark_mode,
+                            color: isDark ? Colors.amber : AppColors.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                            style: TextStyle(
+                              color: isDark ? Colors.white70 : AppColors.textSecondary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],

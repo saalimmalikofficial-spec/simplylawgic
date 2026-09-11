@@ -1,5 +1,6 @@
 // lib/screens/dashboard/tabs/home_tab.dart
 import 'package:flutter/material.dart';
+
 import 'package:simplylawgic/widgets/quick_action_item.dart';
 import 'package:simplylawgic/services/api_service.dart';
 import 'package:simplylawgic/models/subject_notes.dart';
@@ -7,6 +8,8 @@ import 'package:simplylawgic/screens/notes/note_detail_screen.dart';
 import 'package:simplylawgic/screens/learning/continue_learning_screen.dart';
 import 'package:simplylawgic/screens/live/live_classes_screen.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
+
+import '../../user_progress_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -28,6 +31,7 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Future<void> _loadSubjectNotes() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -35,427 +39,504 @@ class _HomeTabState extends State<HomeTab> {
 
     try {
       final notes = await _apiService.getSubjectNotes();
+      if (!mounted) return;
       setState(() {
         _subjectNotes = notes;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: _loadSubjectNotes,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 30),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Banner / Announcement Section with Image
-              Container(
-                width: double.infinity,
-                height: 180,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  image: const DecorationImage(
-                    image: AssetImage('assets/images/b1.png'),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.black.withOpacity(0.5),
-                        Colors.black.withOpacity(0.2),
-                      ],
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Mock Test Live! 🎯",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "All India Rank Prediction Test is now active.",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 10,
-                          ),
-                        ),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Attempting test...'),
-                              behavior: SnackBarBehavior.floating,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                        child: const Text(
-                          "Attempt Now",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+    // ✅ Directly detect theme from context - this works every time
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-              const SizedBox(height: 24),
+    final backgroundColor = isDark ? const Color(0xFF0A0A0F) : AppColors.bg;
+    final textColor = isDark ? Colors.white : AppColors.textDark;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final cardColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final shadowColor = isDark ? Colors.white.withOpacity(0.03) : AppColors.cardShadow;
 
-              // Quick Actions Grid
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  QuickActionItem(
-                    icon: Icons.play_circle_fill,
-                    title: "Live Classes",
-                    color: AppColors.error,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LiveClassesScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  QuickActionItem(
-                    icon: Icons.book,
-                    title: "PDF Notes",
-                    color: Colors.orange,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('PDF Notes feature coming soon!'),
-                          behavior: SnackBarBehavior.floating,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
-                  QuickActionItem(
-                    icon: Icons.quiz,
-                    title: "Test Series",
-                    color: Colors.blue,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Test Series feature coming soon!'),
-                          behavior: SnackBarBehavior.floating,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
-                  QuickActionItem(
-                    icon: Icons.question_answer,
-                    title: "Doubts",
-                    color: Colors.green,
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Doubts feature coming soon!'),
-                          behavior: SnackBarBehavior.floating,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Continue Learning Section with View All
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Continue Learning",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ContinueLearningScreen(),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      "View All",
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Continue Learning Card - Clickable
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ContinueLearningScreen(),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.textPrimary.withOpacity(0.04),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        height: 60,
-                        width: 60,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.functions,
-                          color: AppColors.primary,
-                          size: 30,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Integration & Calculus",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Chapter 4 • Lecture 2 of 8",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            LinearProgressIndicator(
-                              value: 0.6,
-                              backgroundColor: AppColors.border,
-                              color: AppColors.primary,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: AppColors.textSecondary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Subject Notes Section
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Subject-Wise Notes",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('View all notes coming soon!'),
-                          behavior: SnackBarBehavior.floating,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    child: Text(
-                      "View All",
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Loading State
-              if (_isLoading)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(40.0),
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  ),
-                )
-              // Error State
-              else if (_errorMessage != null)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(40.0),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 60,
-                          color: AppColors.error,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _errorMessage!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: _loadSubjectNotes,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                          ),
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              // Data State
-              else if (_subjectNotes.isEmpty)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(40.0),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.book_outlined,
-                            size: 60,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No notes available',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                // Subject Notes Cards
-                  SizedBox(
-                    height: 280,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _subjectNotes.length,
-                      itemBuilder: (context, index) {
-                        final note = _subjectNotes[index];
-                        return SubjectNoteCard(
-                          subjectName: note.subjectName,
-                          displayTitle: note.displayTitle,
-                          tagline: note.tagline,
-                          heroBookImageUrl: note.heroBookImageUrl,
-                          subjectCategory: note.subjectCategory,
-                          slug: note.slug,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => NoteDetailScreen(slug: note.slug),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-            ],
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _loadSubjectNotes,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 30),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLiveBanner(context, isDark),
+                const SizedBox(height: 20),
+                _buildQuickActionsGrid(context, isDark, cardColor, borderColor, shadowColor),
+                const SizedBox(height: 24),
+                _buildContinueLearningSection(context, isDark, cardColor, borderColor, shadowColor, textColor, secondaryTextColor),
+                const SizedBox(height: 24),
+                _buildSubjectNotesHeader(context, isDark, textColor),
+                const SizedBox(height: 12),
+                _buildSubjectNotesContent(isDark, cardColor, borderColor),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  Widget _buildLiveBanner(BuildContext context, bool isDark) {
+    return Container(
+      width: double.infinity,
+      height: 180,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.white.withOpacity(0.05) : AppColors.cardShadow,
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/b1.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: AppColors.primaryDark,
+                ),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.textDark.withOpacity(0.8),
+                    AppColors.textDark.withOpacity(0.3),
+                  ],
+                ),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "Mock Test Live! 🎯",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    "All India Rank Prediction Test is now active.",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.primary,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                    ),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Attempting test...'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: isDark ? const Color(0xFF1A1A2E) : null,
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      "Attempt Now",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionsGrid(BuildContext context, bool isDark, Color cardColor, Color borderColor, Color shadowColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          QuickActionItem(
+            icon: Icons.play_circle_fill_rounded,
+            title: "Live Classes",
+            color: AppColors.danger,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const LiveClassesScreen(),
+                ),
+              );
+            },
+          ),
+          QuickActionItem(
+            icon: Icons.menu_book_rounded,
+            title: "PDF Notes",
+            color: AppColors.warning,
+            onTap: () => _showSnackBar(context, 'PDF Notes feature coming soon!', isDark),
+          ),
+          QuickActionItem(
+            icon: Icons.assignment_turned_in_rounded,
+            title: "Test Series",
+            color: AppColors.primary,
+            onTap: () {
+              // Navigator.push(
+              //   context,
+              //   MaterialPageRoute(
+              //     builder: (context) => const TestsTabHometab(), // ✅ Ab error nahi aayega
+              //   ),
+              // );
+            },
+          ),
+          QuickActionItem(
+            icon: Icons.dashboard,
+            title: "Dashboard",
+            color: AppColors.success,
+            onTap: () => // Or use navigation
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const UserProgressScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContinueLearningSection(BuildContext context, bool isDark, Color cardColor, Color borderColor, Color shadowColor, Color textColor, Color secondaryTextColor) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Continue Learning",
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ContinueLearningScreen(),
+                  ),
+                );
+              },
+              child: const Text(
+                "View All",
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const ContinueLearningScreen(),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: shadowColor,
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  height: 52,
+                  width: 52,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.functions_rounded,
+                    color: AppColors.primary,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Integration & Calculus",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "Chapter 4 • Lecture 2 of 8",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: secondaryTextColor,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: 0.6,
+                          minHeight: 5,
+                          backgroundColor: isDark ? Colors.white.withOpacity(0.1) : AppColors.border,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubjectNotesHeader(BuildContext context, bool isDark, Color textColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          "Subject-Wise Notes",
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
+        TextButton(
+          onPressed: () => _showSnackBar(context, 'View all notes coming soon!', isDark),
+          child: const Text(
+            "View All",
+            style: TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSubjectNotesContent(bool isDark, Color cardColor, Color borderColor) {
+    if (_isLoading) {
+      return SizedBox(
+        height: 200,
+        child: Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primary,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isDark ? Colors.white : AppColors.primary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(Icons.error_outline_rounded, size: 48, color: AppColors.danger),
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _loadSubjectNotes,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_subjectNotes.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(Icons.menu_book_rounded, size: 48, color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted),
+              const SizedBox(height: 8),
+              Text(
+                'No notes available',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : AppColors.textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 260,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _subjectNotes.length,
+        itemBuilder: (context, index) {
+          final note = _subjectNotes[index];
+          return SubjectNoteCard(
+            subjectName: note.subjectName,
+            displayTitle: note.displayTitle,
+            tagline: note.tagline,
+            heroBookImageUrl: note.heroBookImageUrl,
+            subjectCategory: note.subjectCategory,
+            slug: note.slug,
+            isDark: isDark,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => NoteDetailScreen(slug: note.slug),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  void _showSnackBar(BuildContext context, String message, bool isDark) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        backgroundColor: isDark ? const Color(0xFF1A1A2E) : null,
+      ),
+    );
+  }
 }
 
-// Custom Subject Note Card Widget
 class SubjectNoteCard extends StatelessWidget {
   final String subjectName;
   final String displayTitle;
@@ -463,6 +544,7 @@ class SubjectNoteCard extends StatelessWidget {
   final String heroBookImageUrl;
   final String subjectCategory;
   final String slug;
+  final bool isDark;
   final VoidCallback onTap;
 
   const SubjectNoteCard({
@@ -473,162 +555,148 @@ class SubjectNoteCard extends StatelessWidget {
     required this.heroBookImageUrl,
     required this.subjectCategory,
     required this.slug,
+    required this.isDark,
     required this.onTap,
   });
 
+  Color _getCategoryColor(String category) {
+    switch (category.toLowerCase()) {
+      case 'major laws':
+        return AppColors.primary;
+      case 'minor laws':
+        return AppColors.secondary;
+      case 'procedural laws':
+        return AppColors.warning;
+      default:
+        return AppColors.primary;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    Color getCategoryColor(String category) {
-      switch (category.toLowerCase()) {
-        case 'major laws':
-          return AppColors.primary;
-        case 'minor laws':
-          return const Color(0xFF00B894);
-        case 'procedural laws':
-          return const Color(0xFFFDCB6E);
-        default:
-          return AppColors.primary;
-      }
-    }
-
-    Color getCategoryBgColor(String category) {
-      return getCategoryColor(category).withOpacity(0.12);
-    }
+    final catColor = _getCategoryColor(subjectCategory);
+    final cardColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
+    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final shadowColor = isDark ? Colors.white.withOpacity(0.03) : AppColors.cardShadow;
+    final textColor = isDark ? Colors.white : AppColors.textDark;
+    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
 
     return Container(
-      width: 280,
-      margin: const EdgeInsets.only(right: 16),
+      width: 250,
+      margin: const EdgeInsets.only(right: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: AppColors.textPrimary.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: shadowColor,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Image/Header Section
-          Container(
-            height: 100,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: getCategoryBgColor(subjectCategory),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Container(
+                  height: 90,
+                  width: double.infinity,
+                  color: catColor.withOpacity(0.12),
+                  child: heroBookImageUrl.isNotEmpty
+                      ? Image.network(
+                    heroBookImageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Center(
+                      child: Icon(Icons.menu_book_rounded, size: 36, color: catColor),
+                    ),
+                  )
+                      : Center(
+                    child: Icon(Icons.menu_book_rounded, size: 36, color: catColor),
+                  ),
+                ),
               ),
-              image: heroBookImageUrl.isNotEmpty
-                  ? DecorationImage(
-                image: NetworkImage(heroBookImageUrl),
-                fit: BoxFit.cover,
-                onError: (_, __) {},
-              )
-                  : null,
-            ),
-            child: heroBookImageUrl.isEmpty
-                ? Center(
-              child: Icon(
-                Icons.book,
-                size: 40,
-                color: getCategoryColor(subjectCategory),
-              ),
-            )
-                : null,
-          ),
-          // Content Section
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Category Badge
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: getCategoryBgColor(subjectCategory),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    subjectCategory.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: getCategoryColor(subjectCategory),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                // Title
-                Text(
-                  displayTitle,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                // Tagline or Subject Name
-                Text(
-                  tagline.isNotEmpty ? tagline : subjectName,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                // Read More Button
-                InkWell(
-                  onTap: onTap,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Read More',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: catColor.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              subjectCategory.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: catColor,
+                              ),
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 4),
-                        Icon(
-                          Icons.arrow_forward,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 6),
+                          Text(
+                            displayTitle,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: textColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            tagline.isNotEmpty ? tagline : subjectName,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: secondaryTextColor,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Text(
+                            'Read Notes',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: catColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 14,
+                            color: catColor,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
