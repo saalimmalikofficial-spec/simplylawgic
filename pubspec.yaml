@@ -1,42 +1,45 @@
-name: simplylawgic
-description: "Simply Lawgic"
-publish_to: 'none'
-version: 1.0.0+1
 
-environment:
-  sdk: ^3.11.5
 
-dependencies:
+  name: simplylawgic
+  description: "Simply Lawgic"
+  publish_to: 'none'
+  version: 1.0.0+1
+
+  environment:
+    sdk: ^3.11.5
+
+  dependencies:
+    flutter:
+      sdk: flutter
+
+    cupertino_icons: ^1.0.8
+    qr_flutter: ^4.1.0
+    get: ^4.6.6
+    http: ^1.1.0
+    flutter_secure_storage: ^9.0.0
+    firebase_core: ^4.2.0
+    youtube_player_flutter: ^10.0.1
+    image_picker: ^1.0.7
+    http_parser: ^4.0.2
+    shared_preferences: ^2.2.2
+    url_launcher: ^6.3.0
+
+  dev_dependencies:
+    flutter_test:
+      sdk: flutter
+    flutter_lints: ^6.0.0
+    flutter_launcher_icons: ^0.14.4
+
   flutter:
-    sdk: flutter
+    uses-material-design: true
 
-  cupertino_icons: ^1.0.8
-  qr_flutter: ^4.1.0
-  flutter_secure_storage: ^9.0.0
-  firebase_core: ^4.2.0
-  youtube_player_flutter: ^10.0.1
-  image_picker: ^1.0.7      # ✅ YE ADD KARO
-  http_parser: ^4.0.2       # ✅ YE BHI ADD KARO
-  http: ^1.1.0              # ye already hoga
-  shared_preferences: ^2.2.2 # ye already hoga
+    assets:
+      - assets/images/
 
+  flutter_launcher_icons:
+    android: true
+    ios: true
+    image_path: "assets/images/appicon.png"
+    adaptive_icon_background: "#FFFFFF"
+    adaptive_icon_foreground: "assets/images/appicon.png"
 
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.14.4
-
-flutter:
-  uses-material-design: true
-
-  assets:
-    - assets/images/
-
-flutter_launcher_icons:
-  android: true
-  ios: true
-  image_path: "assets/images/appicon.png"
-
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/appicon.png"

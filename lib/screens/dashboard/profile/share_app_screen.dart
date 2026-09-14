@@ -1,4 +1,7 @@
+// lib/screens/dashboard/profile/share_app_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -11,8 +14,45 @@ class ShareAppScreen extends StatefulWidget {
 
 class _ShareAppScreenState extends State<ShareAppScreen> {
   bool _showQRCode = false;
-  final String _referralCode = 'LAW2026';
-  final String _appLink = 'https://simplylawgic.com/download?ref=LAW2026';
+
+  final StorageService _storage = StorageService();
+
+  // 👇 Play Store base URL
+  static const String _playStoreUrl =
+      'https://play.google.com/store/apps/details?id=com.bettlebyte.drivelabs';
+
+  // Defaults (fallback) — overwritten once storage loads
+  String _referralCode = 'LAW2026';
+  String _appLink = _playStoreUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReferral();
+  }
+
+  Future<void> _loadReferral() async {
+    try {
+      final student = await _storage.getStudent();
+      final code = student?.referralCode;
+
+      if (code != null && code.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _referralCode = code;
+          // 👇 Play Store link + referral (used by both QR & Copy Link)
+          _appLink = '$_playStoreUrl&referrer=ref%3D$code';
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _appLink = _playStoreUrl;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load referral code: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +68,10 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
             _showQRCode = !_showQRCode;
           });
           if (_showQRCode) {
-            _showSnackBar(context, '📱 QR Code generated! Scan to download app.');
+            _showSnackBar(
+              context,
+              '📱 QR Code generated! Scan to download app.',
+            );
           }
         },
       ),
@@ -36,41 +79,31 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
         icon: Icons.link_rounded,
         label: 'Copy Link',
         color: Colors.blue,
-        onTap: () {
-          _copyToClipboard(context);
-        },
+        onTap: () => _copyToClipboard(context),
       ),
       ShareOption(
         icon: Icons.share_rounded,
         label: 'Share',
         color: Colors.green,
-        onTap: () {
-          _showShareOptions(context);
-        },
+        onTap: () => _showShareOptions(context),
       ),
       ShareOption(
         icon: Icons.telegram,
         label: 'Telegram',
         color: const Color(0xFF0088CC),
-        onTap: () {
-          _showSnackBar(context, '📤 Sharing on Telegram...');
-        },
+        onTap: () => _showSnackBar(context, '📤 Sharing on Telegram...'),
       ),
       ShareOption(
         icon: Icons.cabin,
         label: 'WhatsApp',
         color: const Color(0xFF25D366),
-        onTap: () {
-          _showSnackBar(context, '📤 Sharing on WhatsApp...');
-        },
+        onTap: () => _showSnackBar(context, '📤 Sharing on WhatsApp...'),
       ),
       ShareOption(
         icon: Icons.email_rounded,
         label: 'Email',
         color: Colors.redAccent,
-        onTap: () {
-          _showSnackBar(context, '📧 Opening email...');
-        },
+        onTap: () => _showSnackBar(context, '📧 Opening email...'),
       ),
     ];
 
@@ -87,7 +120,10 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
         backgroundColor: isDark ? const Color(0xFF12121A) : Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : AppColors.textPrimary),
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDark ? Colors.white : AppColors.textPrimary,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -112,7 +148,7 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // QR Code Section (Toggle)
+            // ============ QR Code Section (Toggle) ============
             if (_showQRCode) ...[
               Container(
                 padding: const EdgeInsets.all(24),
@@ -152,13 +188,14 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : AppColors.textPrimary,
+                            color:
+                            isDark ? Colors.white : AppColors.textPrimary,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 20),
-                    // QR Code
+                    // QR Code — encodes Play Store link + referral
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -183,7 +220,8 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                     ),
                     const SizedBox(height: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
@@ -209,13 +247,14 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    // Copy Link Button
+                    // Copy Link Button — copies Play Store link + referral
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () => _copyToClipboard(context),
                         style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: AppColors.primary.withOpacity(0.3)),
+                          side: BorderSide(
+                              color: AppColors.primary.withOpacity(0.3)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -230,91 +269,16 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
               const SizedBox(height: 24),
             ],
 
-            // App Logo/Header with Assets
-            // Container(
-            //   padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
-            //   decoration: BoxDecoration(
-            //     gradient: LinearGradient(
-            //       begin: Alignment.topCenter,
-            //       end: Alignment.bottomCenter,
-            //       colors: [
-            //         AppColors.primary.withOpacity(0.1),
-            //         AppColors.primary.withOpacity(0.03),
-            //       ],
-            //     ),
-            //     borderRadius: BorderRadius.circular(24),
-            //     border: Border.all(
-            //       color: AppColors.primary.withOpacity(0.15),
-            //     ),
-            //   ),
-            //   child: Column(
-            //     children: [
-            //       // App Logo from assets
-            //       Container(
-            //         width: 100,
-            //         height: 100,
-            //         decoration: BoxDecoration(
-            //           color: Colors.white,
-            //           shape: BoxShape.circle,
-            //           boxShadow: [
-            //             BoxShadow(
-            //               color: AppColors.primary.withOpacity(0.3),
-            //               blurRadius: 30,
-            //               offset: const Offset(0, 10),
-            //             ),
-            //           ],
-            //           image: const DecorationImage(
-            //             image: AssetImage('assets/images/logo.png'),
-            //             fit: BoxFit.contain,
-            //           ),
-            //         ),
-            //       ),
-            //       const SizedBox(height: 16),
-            //       Text(
-            //         'Share SimplyLawgic',
-            //         style: TextStyle(
-            //           fontSize: 22,
-            //           fontWeight: FontWeight.bold,
-            //           color: isDark ? Colors.white : AppColors.textPrimary,
-            //         ),
-            //       ),
-            //       const SizedBox(height: 8),
-            //       Text(
-            //         'Help others learn law with ease',
-            //         style: TextStyle(
-            //           fontSize: 14,
-            //           color: isDark ? Colors.white60 : AppColors.textSecondary,
-            //         ),
-            //       ),
-            //       const SizedBox(height: 4),
-            //       Container(
-            //         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            //         decoration: BoxDecoration(
-            //           color: AppColors.primary.withOpacity(0.15),
-            //           borderRadius: BorderRadius.circular(20),
-            //         ),
-            //         child: const Text(
-            //           '✨ Version 1.0.0',
-            //           style: TextStyle(
-            //             fontSize: 12,
-            //             color: AppColors.primary,
-            //             fontWeight: FontWeight.w600,
-            //           ),
-            //         ),
-            //       ),
-            //     ],
-            //   ),
-            // ),
-            const SizedBox(height: 24),
-
-            // Referral Code with App Icon
+            // ============ Referral Code Card ============
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isDark ? Colors.white.withOpacity(0.06) : AppColors.border,
+                  color: isDark
+                      ? Colors.white.withOpacity(0.06)
+                      : AppColors.border,
                 ),
               ),
               child: Column(
@@ -322,7 +286,6 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                 children: [
                   Row(
                     children: [
-                      // Small app icon
                       Container(
                         width: 36,
                         height: 36,
@@ -342,7 +305,8 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : AppColors.textPrimary,
+                            color:
+                            isDark ? Colors.white : AppColors.textPrimary,
                           ),
                         ),
                       ),
@@ -350,12 +314,15 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                   ),
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF0A0A0F) : Colors.grey[50],
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isDark ? Colors.white.withOpacity(0.06) : AppColors.border,
+                        color: isDark
+                            ? Colors.white.withOpacity(0.06)
+                            : AppColors.border,
                       ),
                     ),
                     child: Row(
@@ -381,17 +348,18 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 2,
-                                color: isDark ? Colors.white : AppColors.textPrimary,
+                                color: isDark
+                                    ? Colors.white
+                                    : AppColors.textPrimary,
                               ),
                             ),
                           ],
                         ),
                         InkWell(
-                          onTap: () {
-                            _copyToClipboard(context);
-                          },
+                          onTap: () => _copyReferralOnly(context),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(8),
@@ -414,7 +382,8 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                     'Share this code with friends and earn rewards! 🎁',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDark ? Colors.white60 : AppColors.textSecondary,
+                      color:
+                      isDark ? Colors.white60 : AppColors.textSecondary,
                     ),
                   ),
                 ],
@@ -422,7 +391,7 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Share Options Grid
+            // ============ Share Options Grid ============
             Text(
               'Share with friends',
               style: TextStyle(
@@ -445,15 +414,12 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
               itemCount: shareOptions.length,
               itemBuilder: (context, index) {
                 final option = shareOptions[index];
-                return _buildShareOption(
-                  option: option,
-                  isDark: isDark,
-                );
+                return _buildShareOption(option: option, isDark: isDark);
               },
             ),
             const SizedBox(height: 24),
 
-            // Earn Rewards Section with Banner
+            // ============ Earn Rewards Section ============
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -466,9 +432,7 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                   ],
                 ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.orange.withOpacity(0.2),
-                ),
+                border: Border.all(color: Colors.orange.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
@@ -494,7 +458,8 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : AppColors.textPrimary,
+                            color:
+                            isDark ? Colors.white : AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -502,14 +467,17 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                           'Get 50 coins for each friend who joins using your code',
                           style: TextStyle(
                             fontSize: 13,
-                            color: isDark ? Colors.white70 : AppColors.textSecondary,
+                            color: isDark
+                                ? Colors.white70
+                                : AppColors.textSecondary,
                           ),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.orange,
                       borderRadius: BorderRadius.circular(20),
@@ -545,7 +513,8 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
           color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDark ? Colors.white.withOpacity(0.06) : AppColors.border,
+            color:
+            isDark ? Colors.white.withOpacity(0.06) : AppColors.border,
           ),
         ),
         child: Column(
@@ -557,11 +526,7 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
                 color: option.color.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                option.icon,
-                color: option.color,
-                size: 28,
-              ),
+              child: Icon(option.icon, color: option.color, size: 28),
             ),
             const SizedBox(height: 8),
             Text(
@@ -578,9 +543,23 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
     );
   }
 
-  void _copyToClipboard(BuildContext context) {
-    final String textToCopy = '🎓 Join SimplyLawgic using my referral code: $_referralCode\n\nDownload the app: $_appLink';
-    _showSnackBar(context, '✅ Copied to clipboard! Share with friends.');
+  // ============ Copy Play Store link (with referral) ============
+  // ✅ Sirf Play Store link copy hoti hai — no extra text
+  Future<void> _copyToClipboard(BuildContext context) async {
+    final String link = _appLink.isNotEmpty ? _appLink : _playStoreUrl;
+
+    await Clipboard.setData(ClipboardData(text: link));
+
+    if (!mounted) return;
+    _showSnackBar(context, '✅ Play Store link copied!');
+  }
+
+  // ============ Copy only the referral code ============
+  Future<void> _copyReferralOnly(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: _referralCode));
+
+    if (!mounted) return;
+    _showSnackBar(context, '✅ Referral code copied!');
   }
 
   void _showShareOptions(BuildContext context) {
@@ -593,7 +572,8 @@ class _ShareAppScreenState extends State<ShareAppScreen> {
         content: Text(message),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
         backgroundColor: message.contains('QR')
             ? Colors.purple
             : message.contains('✅')

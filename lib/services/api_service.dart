@@ -1,136 +1,134 @@
 // lib/services/api_service.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:simplylawgic/services/storage_service.dart'; // Add this import
+import 'package:http_parser/http_parser.dart';
+import 'package:simplylawgic/services/storage_service.dart';
 import '../models/student_model.dart';
 import '../models/subject_notes.dart';
 import '../models/test_series.dart';
 
-import 'dart:io';
-import 'package:http_parser/http_parser.dart'; // Add this import at top
-
 class ApiService {
-  static const String baseUrl = 'https://simply-lawgic-75585420080.asia-south1.run.app/api';
+  static const String baseUrl =
+      'https://simply-lawgic-75585420080.asia-south1.run.app/api';
   final StorageService _storage = StorageService();
 
-  // Existing sign in method
+  // ============ AUTH ============
+
+  // Sign in
   Future<SignInResponse> signIn(String email, String password) async {
     final url = Uri.parse('$baseUrl/student/auth/signin');
 
     try {
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({
-          'email': email,
-          'password': password,
-        }),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'email': email, 'password': password}),
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
-        return SignInResponse.fromJson(data);
+        final signIn = SignInResponse.fromJson(data);
+
+        // 👇 Auto-save everything to storage
+        await _storage.saveToken(signIn.token);
+        await _storage.saveStudent(signIn.student);
+        await _storage.saveProfileComplete(signIn.profileComplete);
+
+        return signIn;
       } else {
         final Map<String, dynamic> errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Sign in failed');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Send OTP method
+  // Send OTP (login/signup)
   Future<Map<String, dynamic>> sendOTP(String phone) async {
     final url = Uri.parse('$baseUrl/student/auth/phone/send-otp');
 
     try {
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({
-          'phone': phone,
-        }),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'phone': phone}),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        return data;
+        return json.decode(response.body);
       } else {
         final Map<String, dynamic> errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to send OTP');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Verify OTP method
+  // Verify OTP (login/signup)
   Future<Map<String, dynamic>> verifyOTP(String phone, String otp) async {
     final url = Uri.parse('$baseUrl/student/auth/phone/verify-otp');
 
     try {
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({
-          'phone': phone,
-          'otp': otp,
-        }),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'phone': phone, 'otp': otp}),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        return data;
+        return json.decode(response.body);
       } else {
         final Map<String, dynamic> errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to verify OTP');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Add signup method
+  // Sign up
   Future<Map<String, dynamic>> signUp(Map<String, dynamic> signupData) async {
     final url = Uri.parse('$baseUrl/student/auth/signup');
 
     try {
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: json.encode(signupData),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        return data;
+        return json.decode(response.body);
       } else {
         final Map<String, dynamic> errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Signup failed');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Get subject-wise notes
+  // ============ SUBJECT NOTES ============
+
+  // Get all subject-wise notes
   Future<List<SubjectNotes>> getSubjectNotes() async {
     final url = Uri.parse('$baseUrl/subject-wise-notes/public');
 
     try {
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       if (response.statusCode == 200) {
@@ -139,6 +137,8 @@ class ApiService {
       } else {
         throw Exception('Failed to load subject notes');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
@@ -151,9 +151,7 @@ class ApiService {
     try {
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       if (response.statusCode == 200) {
@@ -162,21 +160,23 @@ class ApiService {
       } else {
         throw Exception('Failed to load note details');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Get test series
+  // ============ TEST SERIES ============
+
+  // Get all test series
   Future<List<TestSeries>> getTestSeries() async {
     final url = Uri.parse('$baseUrl/test-series/public');
 
     try {
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       if (response.statusCode == 200) {
@@ -185,6 +185,8 @@ class ApiService {
       } else {
         throw Exception('Failed to load test series');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
@@ -197,9 +199,7 @@ class ApiService {
     try {
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       if (response.statusCode == 200) {
@@ -208,16 +208,18 @@ class ApiService {
       } else {
         throw Exception('Failed to load test series details');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Start test attempt
-// lib/services/api_service.dart (Update startTestAttempt method)
+  // ============ TEST ATTEMPT ============
 
-// Start test attempt
-  Future<Map<String, dynamic>> startTestAttempt(String seriesSlug, String testId) async {
+  // Start test attempt
+  Future<Map<String, dynamic>> startTestAttempt(
+      String seriesSlug, String testId) async {
     final url = Uri.parse('$baseUrl/test-series/attempts/start');
 
     try {
@@ -229,13 +231,13 @@ class ApiService {
           'Authorization': 'Bearer $token',
         },
         body: json.encode({
-          'slug': seriesSlug,      // Changed from seriesSlug to slug
+          'slug': seriesSlug,
           'testId': testId,
         }),
       );
 
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      print('startTestAttempt status: ${response.statusCode}');
+      print('startTestAttempt body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return json.decode(response.body);
@@ -246,14 +248,18 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to start test');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Submit answer
-  Future<Map<String, dynamic>> submitAnswer(String attemptId, String questionId, String selectedOption) async {
-    final url = Uri.parse('$baseUrl/test-series/attempts/$attemptId/answer');
+  // Submit single answer
+  Future<Map<String, dynamic>> submitAnswer(
+      String attemptId, String questionId, String selectedOption) async {
+    final url =
+    Uri.parse('$baseUrl/test-series/attempts/$attemptId/answer');
 
     try {
       final token = await _getToken();
@@ -275,13 +281,16 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to submit answer');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
   // Mark question for review
-  Future<Map<String, dynamic>> markQuestion(String attemptId, String questionId, bool marked) async {
+  Future<Map<String, dynamic>> markQuestion(
+      String attemptId, String questionId, bool marked) async {
     final url = Uri.parse('$baseUrl/test-series/attempts/$attemptId/mark');
 
     try {
@@ -304,24 +313,16 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to mark question');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Get token from storage
-  Future<String> _getToken() async {
-    final token = await _storage.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('No authentication token found');
-    }
-    return token;
-  }
-
-  // lib/services/api_service.dart (Add this method)
-
-// Sync answers (save all answers at once)
-  Future<Map<String, dynamic>> syncAnswers(String attemptId, List<Map<String, dynamic>> answers) async {
+  // Sync all answers at once
+  Future<Map<String, dynamic>> syncAnswers(
+      String attemptId, List<Map<String, dynamic>> answers) async {
     final url = Uri.parse('$baseUrl/test-series/attempts/$attemptId/sync');
 
     try {
@@ -332,9 +333,7 @@ class ApiService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: json.encode({
-          'answers': answers,
-        }),
+        body: json.encode({'answers': answers}),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -343,12 +342,14 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to sync answers');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-// Submit test (final submission)
+  // Submit test (final)
   Future<Map<String, dynamic>> submitTest(String attemptId) async {
     final url = Uri.parse('$baseUrl/test-series/attempts/$attemptId/submit');
 
@@ -368,12 +369,44 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to submit test');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  // Get student dashboard analytics
+  // ============ ANALYTICS ============
+
+  // Student dashboard analytics
+  // Future<Map<String, dynamic>> getStudentAnalytics({int limit = 50}) async {
+  //   final url = Uri.parse('$baseUrl/student/dashboard/analytics?limit=$limit');
+  //
+  //   try {
+  //     final token = await _getToken();
+  //     final response = await http.get(
+  //       url,
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         'Authorization': 'Bearer $token',
+  //       },
+  //     );
+  //
+  //     if (response.statusCode == 200) {
+  //       return json.decode(response.body);
+  //     } else {
+  //       final errorData = json.decode(response.body);
+  //       throw Exception(errorData['message'] ?? 'Failed to fetch analytics');
+  //     }
+  //   } on Exception {
+  //     rethrow;
+  //   } catch (e) {
+  //     throw Exception('Network error: ${e.toString()}');
+  //   }
+  // }
+
+
+  // Student dashboard analytics
   Future<Map<String, dynamic>> getStudentAnalytics({int limit = 50}) async {
     final url = Uri.parse('$baseUrl/student/dashboard/analytics?limit=$limit');
 
@@ -388,20 +421,31 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        final data = json.decode(response.body) as Map<String, dynamic>;
+
+        // 👇 Profile ko local storage mein bhi save kar do
+        final profileJson = data['profile'];
+        if (profileJson != null && profileJson is Map<String, dynamic>) {
+          try {
+            await _storage.saveStudent(Student.fromJson(profileJson));
+          } catch (_) {}
+        }
+
+        return data;
       } else {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to fetch analytics');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-  //profile section
   // ============ CHANGE PHONE ============
 
-// Send OTP to new phone number
+  // Send OTP to new phone number
   Future<Map<String, dynamic>> changePhoneSendOtp(String phone) async {
     final url = Uri.parse('$baseUrl/student/auth/change-phone/send-otp');
 
@@ -413,9 +457,7 @@ class ApiService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: json.encode({
-          'phone': phone,
-        }),
+        body: json.encode({'phone': phone}),
       );
 
       print('changePhoneSendOtp status: ${response.statusCode}');
@@ -427,12 +469,14 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to send OTP');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-// Verify OTP and update phone
+  // Verify OTP and update phone
   Future<Map<String, dynamic>> changePhoneVerify(
       String phone, String otp) async {
     final url = Uri.parse('$baseUrl/student/auth/change-phone/verify');
@@ -445,10 +489,7 @@ class ApiService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: json.encode({
-          'phone': phone,
-          'otp': otp,
-        }),
+        body: json.encode({'phone': phone, 'otp': otp}),
       );
 
       print('changePhoneVerify status: ${response.statusCode}');
@@ -457,9 +498,11 @@ class ApiService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
 
-        // Save new token if provided
         if (data['token'] != null) {
           await _storage.saveToken(data['token']);
+        }
+        if (data['student'] != null) {
+          await _storage.saveStudent(Student.fromJson(data['student']));
         }
 
         return data;
@@ -467,13 +510,16 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to verify OTP');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
+
   // ============ CHANGE EMAIL ============
 
-// Step 1: Send OTP to confirm new email
+  // Step 1: Send OTP to confirm new email
   Future<Map<String, dynamic>> changeEmailSendOtp(String email) async {
     final url = Uri.parse('$baseUrl/student/auth/change-email/send-otp');
 
@@ -485,9 +531,7 @@ class ApiService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: json.encode({
-          'email': email,
-        }),
+        body: json.encode({'email': email}),
       );
 
       print('changeEmailSendOtp status: ${response.statusCode}');
@@ -499,12 +543,14 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to send OTP');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-// Step 2: Verify OTP and update email
+  // Step 2: Verify OTP and update email
   Future<Map<String, dynamic>> changeEmailVerify(
       String email, String otp) async {
     final url = Uri.parse('$baseUrl/student/auth/change-email/verify');
@@ -517,10 +563,7 @@ class ApiService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: json.encode({
-          'email': email,
-          'otp': otp,
-        }),
+        body: json.encode({'email': email, 'otp': otp}),
       );
 
       print('changeEmailVerify status: ${response.statusCode}');
@@ -529,15 +572,11 @@ class ApiService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
 
-        // Save new token
         if (data['token'] != null) {
           await _storage.saveToken(data['token']);
         }
-
-        // Save updated student object
         if (data['student'] != null) {
-          // Agar aapke StorageService mein saveStudent method hai toh:
-          // await _storage.saveStudent(Student.fromJson(data['student']));
+          await _storage.saveStudent(Student.fromJson(data['student']));
         }
 
         return data;
@@ -545,13 +584,14 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to verify OTP');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
   }
 
-
-// ============ UPLOAD AVATAR ============
+  // ============ UPLOAD AVATAR ============
 
   Future<Map<String, dynamic>> uploadAvatar(File imageFile) async {
     final url = Uri.parse('$baseUrl/student/auth/avatar');
@@ -559,13 +599,9 @@ class ApiService {
     try {
       final token = await _getToken();
 
-      // Create multipart request
       final request = http.MultipartRequest('POST', url);
-
-      // Add headers
       request.headers['Authorization'] = 'Bearer $token';
 
-      // Add file with proper content type
       final extension = imageFile.path.split('.').last.toLowerCase();
       MediaType contentType;
 
@@ -585,13 +621,12 @@ class ApiService {
 
       request.files.add(
         await http.MultipartFile.fromPath(
-          'avatar', // API field name
+          'avatar',
           imageFile.path,
           contentType: contentType,
         ),
       );
 
-      // Send request
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
@@ -601,12 +636,9 @@ class ApiService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
 
-        // Save new token
         if (data['token'] != null) {
           await _storage.saveToken(data['token']);
         }
-
-        // Save updated student
         if (data['student'] != null) {
           await _storage.saveStudent(Student.fromJson(data['student']));
         }
@@ -616,8 +648,135 @@ class ApiService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['message'] ?? 'Failed to upload avatar');
       }
+    } on Exception {
+      rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
     }
+  }
+
+  // ============ UPDATE PROFILE ============
+
+  /// Update student profile (name, preparingForExam, etc.)
+  /// POST /api/student/auth/profile
+  Future<Map<String, dynamic>> updateProfile({
+    required String name,
+    required String preparingForExam,
+  }) async {
+    final url = Uri.parse('$baseUrl/student/auth/profile');
+
+    try {
+      final token = await _getToken();
+      final response = await http.patch(          // 👈 POST → PATCH
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'name': name,
+          'preparingForExam': preparingForExam,
+        }),
+      );
+
+      print('updateProfile status: ${response.statusCode}');
+      print('updateProfile body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = json.decode(response.body);
+
+        if (data['token'] != null) {
+          await _storage.saveToken(data['token']);
+        }
+        if (data['student'] != null) {
+          await _storage.saveStudent(Student.fromJson(data['student']));
+        }
+
+        return data;
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to update profile');
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // ============ FORGOT PASSWORD ============
+
+  // Step 1: Send OTP to registered phone
+  Future<Map<String, dynamic>> forgotPasswordSendOtp(String phone) async {
+    final url = Uri.parse('$baseUrl/student/auth/forgot-password/send-otp');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'phone': phone}),
+      );
+
+      print('forgotPasswordSendOtp status: ${response.statusCode}');
+      print('forgotPasswordSendOtp body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to send OTP');
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // Step 2: Reset password with OTP
+  Future<Map<String, dynamic>> forgotPasswordReset({
+    required String phone,
+    required String otp,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final url = Uri.parse('$baseUrl/student/auth/forgot-password/reset');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'phone': phone,
+          'otp': otp,
+          'newPassword': newPassword,
+          'confirmPassword': confirmPassword,
+        }),
+      );
+
+      print('forgotPasswordReset status: ${response.statusCode}');
+      print('forgotPasswordReset body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      } else {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to reset password');
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // ============ TOKEN HELPER ============
+
+  Future<String> _getToken() async {
+    final token = await _storage.getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('No authentication token found');
+    }
+    return token;
   }
 }

@@ -1,5 +1,6 @@
 // lib/screens/tests/test_series_detail_screen.dart
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:simplylawgic/screens/dashboard/tabs/test_attempt_screen.dart';
 import 'package:simplylawgic/services/api_service.dart';
 import 'package:simplylawgic/models/test_series.dart';
@@ -22,6 +23,9 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   final ApiService _apiService = ApiService();
+
+  // 👇 Website URL
+  static const String _websiteUrl = 'https://simplylawgic.com/';
 
   @override
   void initState() {
@@ -56,15 +60,36 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
     return _testSeries!.tests.fold(0, (sum, test) => sum + test.durationMinutes);
   }
 
-  void _startTest(Test test) {
-    if (_testSeries!.isPaid) {
+  // ============ OPEN WEBSITE (for paid unlock) ============
+  Future<void> _openWebsite() async {
+    final Uri url = Uri.parse(_websiteUrl);
+
+    try {
+      final launched = await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication, // opens in browser
+      );
+
+      if (!launched) {
+        throw Exception('Could not launch $_websiteUrl');
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please purchase this test series first!'),
+          content: Text('❌ Could not open website: $e'),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  // ============ START TEST ============
+  void _startTest(Test test) {
+    // Paid series → website pe bhejo
+    if (_testSeries!.isPaid) {
+      _openWebsite();
       return;
     }
 
@@ -85,10 +110,13 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF0A0A0F) : AppColors.bg;
     final cardColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
-    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final borderColor =
+    isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
     final textColor = isDark ? Colors.white : AppColors.textDark;
-    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
-    final shadowColor = isDark ? Colors.white.withOpacity(0.03) : AppColors.cardShadow;
+    final secondaryTextColor =
+    isDark ? Colors.white70 : AppColors.textSecondary;
+    final shadowColor =
+    isDark ? Colors.white.withOpacity(0.03) : AppColors.cardShadow;
     final appBarBg = isDark ? const Color(0xFF12121E) : AppColors.primary;
 
     return Scaffold(
@@ -125,7 +153,8 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
 
   Widget _buildErrorView(bool isDark) {
     final textColor = isDark ? Colors.white : AppColors.textDark;
-    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final secondaryTextColor =
+    isDark ? Colors.white70 : AppColors.textSecondary;
 
     return Center(
       child: Padding(
@@ -136,7 +165,9 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF2D1B1B) : AppColors.error.withOpacity(0.1),
+                color: isDark
+                    ? const Color(0xFF2D1B1B)
+                    : AppColors.error.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -162,8 +193,10 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: isDark ? Colors.white : AppColors.primary,
-                foregroundColor: isDark ? const Color(0xFF0A0A0F) : Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                foregroundColor:
+                isDark ? const Color(0xFF0A0A0F) : Colors.white,
+                padding:
+                const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -198,9 +231,12 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
           leading: Padding(
             padding: const EdgeInsets.all(8.0),
             child: CircleAvatar(
-              backgroundColor: isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.3),
+              backgroundColor: isDark
+                  ? Colors.white.withOpacity(0.15)
+                  : Colors.black.withOpacity(0.3),
               child: IconButton(
-                icon: Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                icon: const Icon(Icons.arrow_back,
+                    color: Colors.white, size: 20),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -236,9 +272,12 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isDark ? Colors.white.withOpacity(0.2) : AppColors.secondary,
+                          color: isDark
+                              ? Colors.white.withOpacity(0.2)
+                              : AppColors.secondary,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -265,9 +304,11 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          _buildHeaderBadge(Icons.assignment_outlined, '${testSeries.testCount} Tests'),
+                          _buildHeaderBadge(Icons.assignment_outlined,
+                              '${testSeries.testCount} Tests'),
                           const SizedBox(width: 16),
-                          _buildHeaderBadge(Icons.timer_outlined, '${_getTotalDuration()} mins'),
+                          _buildHeaderBadge(Icons.timer_outlined,
+                              '${_getTotalDuration()} mins'),
                         ],
                       ),
                     ],
@@ -317,9 +358,12 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                           spacing: 6,
                           runSpacing: 6,
                           children: testSeries.tags.map((tag) {
-                            final tagColor = isDark ? Colors.white.withOpacity(0.15) : AppColors.primary.withOpacity(0.08);
+                            final tagColor = isDark
+                                ? Colors.white.withOpacity(0.15)
+                                : AppColors.primary.withOpacity(0.08);
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
                                 color: tagColor,
                                 borderRadius: BorderRadius.circular(6),
@@ -328,7 +372,9 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                                 '#$tag',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: isDark ? Colors.white70 : AppColors.primary,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : AppColors.primary,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -455,10 +501,13 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
     required Color textColor,
     required Color secondaryTextColor,
   }) {
-    final chipColor = isDark ? const Color(0xFF12121E) : AppColors.primary.withOpacity(0.1);
+    final chipColor =
+    isDark ? const Color(0xFF12121E) : AppColors.primary.withOpacity(0.1);
     final chipTextColor = isDark ? Colors.white70 : AppColors.primary;
-    final warningBg = isDark ? const Color(0xFF2D1F0A) : AppColors.warning.withOpacity(0.12);
-    final warningText = isDark ? const Color(0xFFF59E0B) : AppColors.accentGrey;
+    final warningBg =
+    isDark ? const Color(0xFF2D1F0A) : AppColors.warning.withOpacity(0.12);
+    final warningText =
+    isDark ? const Color(0xFFF59E0B) : AppColors.accentGrey;
     final dangerText = isDark ? const Color(0xFFEF5350) : AppColors.danger;
 
     return _buildCardContainer(
@@ -475,7 +524,9 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Center(
@@ -665,7 +716,9 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                   style: TextStyle(fontSize: 11, color: secondaryTextColor),
                 ),
                 Text(
-                  testSeries.isPaid ? '₹${testSeries.priceAmount} ${testSeries.currency}' : 'FREE',
+                  testSeries.isPaid
+                      ? '₹${testSeries.priceAmount} ${testSeries.currency}'
+                      : 'FREE',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -682,25 +735,22 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                 elevation: 0,
               ),
               onPressed: () {
                 if (testSeries.isPaid) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Payment feature coming soon!'),
-                      behavior: SnackBarBehavior.floating,
-                      backgroundColor: isDark ? const Color(0xFF1A1A2E) : null,
-                    ),
-                  );
+                  // 👇 Paid → open website
+                  _openWebsite();
                 } else if (testSeries.tests.isNotEmpty) {
                   _startTest(testSeries.tests.first);
                 }
               },
               child: Text(
                 testSeries.isPaid ? 'Unlock Now' : 'Start Free Test',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ),
           ],

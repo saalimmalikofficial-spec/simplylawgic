@@ -8,6 +8,7 @@ import 'package:simplylawgic/utils/app_colors.dart';
 import 'package:simplylawgic/widgets/loading_overlay.dart';
 import 'package:simplylawgic/screens/dashboard/dashboard_screen.dart';
 import 'package:simplylawgic/screens/auth/sign_up_step1_screen.dart';
+import 'package:simplylawgic/screens/auth/forgot_password_screen.dart'; // 👈 NEW
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -63,7 +64,8 @@ class _SignInScreenState extends State<SignInScreen> {
             content: Text(response.message),
             backgroundColor: Colors.green.shade600,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -91,7 +93,9 @@ class _SignInScreenState extends State<SignInScreen> {
           child: SingleChildScrollView(
             physics: const ClampingScrollPhysics(),
             child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: size.height - MediaQuery.of(context).padding.top),
+              constraints: BoxConstraints(
+                  minHeight:
+                  size.height - MediaQuery.of(context).padding.top),
               child: IntrinsicHeight(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -125,7 +129,8 @@ class _SignInScreenState extends State<SignInScreen> {
                         const SizedBox(height: 6),
                         Text(
                           "Sign in to continue your prep journey",
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+                          style: TextStyle(
+                              color: AppColors.textSecondary, fontSize: 15),
                         ),
 
                         const SizedBox(height: 32),
@@ -137,7 +142,10 @@ class _SignInScreenState extends State<SignInScreen> {
 
                         Text(
                           "Email",
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 8),
                         _buildTextField(
@@ -152,7 +160,10 @@ class _SignInScreenState extends State<SignInScreen> {
 
                         Text(
                           "Password",
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 8),
                         _buildTextField(
@@ -164,13 +175,16 @@ class _SignInScreenState extends State<SignInScreen> {
                           suffixIcon: IconButton(
                             splashRadius: 20,
                             icon: Icon(
-                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
                               color: AppColors.textSecondary,
                               size: 20,
                             ),
                             onPressed: _isLoading
                                 ? null
-                                : () => setState(() => _obscurePassword = !_obscurePassword),
+                                : () => setState(
+                                    () => _obscurePassword = !_obscurePassword),
                           ),
                         ),
 
@@ -180,21 +194,27 @@ class _SignInScreenState extends State<SignInScreen> {
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              tapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                             ),
                             onPressed: _isLoading
                                 ? null
                                 : () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Forgot password feature coming soon!'),
-                                  behavior: SnackBarBehavior.floating,
+                              // 👇 Navigate to ForgotPasswordScreen
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                  const ForgotPasswordScreen(),
                                 ),
                               );
                             },
                             child: Text(
                               "Forgot password?",
-                              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                              style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13),
                             ),
                           ),
                         ),
@@ -207,20 +227,27 @@ class _SignInScreenState extends State<SignInScreen> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
-                              disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
+                              disabledBackgroundColor:
+                              AppColors.primary.withOpacity(0.6),
                               elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
                             ),
                             onPressed: _isLoading ? null : _handleSignIn,
                             child: _isLoading
                                 ? const SizedBox(
                               height: 22,
                               width: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: Colors.white),
                             )
                                 : const Text(
                               "Sign In",
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white),
                             ),
                           ),
                         ),
@@ -232,20 +259,27 @@ class _SignInScreenState extends State<SignInScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text("Don't have an account? ", style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                              Text("Don't have an account? ",
+                                  style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 14)),
                               GestureDetector(
                                 onTap: _isLoading
                                     ? null
                                     : () {
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (context) => const SignUpStep1Screen()),
+                                    MaterialPageRoute(
+                                        builder: (context) =>
+                                        const SignUpStep1Screen()),
                                   );
                                 },
                                 child: Text(
                                   "Sign Up",
                                   style: TextStyle(
-                                    color: _isLoading ? AppColors.textSecondary : AppColors.primary,
+                                    color: _isLoading
+                                        ? AppColors.textSecondary
+                                        : AppColors.primary,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 14,
                                   ),
@@ -285,17 +319,29 @@ class _SignInScreenState extends State<SignInScreen> {
       style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.6), fontSize: 14),
+        hintStyle: TextStyle(
+            color: AppColors.textSecondary.withOpacity(0.6), fontSize: 14),
         prefixIcon: Icon(icon, size: 20, color: AppColors.textSecondary),
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: const Color(0xFFF7F8FA),
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.primary, width: 1.6)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.error, width: 1.4)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.error, width: 1.6)),
+        contentPadding:
+        const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: AppColors.border)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: AppColors.border)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: AppColors.primary, width: 1.6)),
+        errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: AppColors.error, width: 1.4)),
+        focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: AppColors.error, width: 1.6)),
         errorStyle: TextStyle(color: AppColors.error, fontSize: 12),
       ),
     );
@@ -321,7 +367,10 @@ class _ErrorBanner extends StatelessWidget {
         children: [
           Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
           const SizedBox(width: 10),
-          Expanded(child: Text(message, style: TextStyle(color: AppColors.error, fontSize: 13, height: 1.3))),
+          Expanded(
+              child: Text(message,
+                  style: TextStyle(
+                      color: AppColors.error, fontSize: 13, height: 1.3))),
         ],
       ),
     );
