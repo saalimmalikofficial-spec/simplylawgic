@@ -1,9 +1,11 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:simplylawgic/screens/splash_screen.dart';
 import 'package:simplylawgic/utils/theme_manager.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-// Global instance
+
+// Global theme manager
 final ThemeManager themeManager = ThemeManager();
 
 Future<void> main() async {
@@ -28,24 +30,21 @@ class _EdTechAppState extends State<EdTechApp> {
   void initState() {
     super.initState();
 
-    // Load theme first
     themeManager.loadTheme().then((_) {
       if (mounted) setState(() {});
     });
 
-    // ✅ IMPORTANT: Listener add karo taaki toggle par rebuild ho
     themeManager.addListener(_onThemeChanged);
   }
 
   void _onThemeChanged() {
     if (mounted) {
-      setState(() {}); // Rebuild when theme changes
+      setState(() {});
     }
   }
 
   @override
   void dispose() {
-    // Remove listener
     themeManager.removeListener(_onThemeChanged);
     super.dispose();
   }

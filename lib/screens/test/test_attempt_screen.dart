@@ -1,8 +1,10 @@
 // lib/screens/tests/test_attempt_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:simplylawgic/screens/test/test_instruction_before_start.dart';
 import 'package:simplylawgic/services/api_service.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
+
 import 'dart:async';
 
 class TestAttemptScreen extends StatefulWidget {
@@ -36,6 +38,18 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   Timer? _syncTimer;
   final ApiService _apiService = ApiService();
 
+  // 🔥🔥🔥 2-phase flow
+  bool _showInstructions = true;
+
+  // 🔥 Dynamic test meta from API
+  String _testTitle = '';
+  String _seriesTitle = '';
+  String _testInstructions = '';
+  int _durationMinutes = 0;
+  int _questionCount = 0;
+  int _totalMarks = 0;
+  double _negativeMarks = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -49,11 +63,15 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     super.dispose();
   }
 
+  // ============================================================
+  // 🔥 _startTest — API se data lekar instruction screen dikhao
+  // ============================================================
   Future<void> _startTest() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
       _isTestSubmitted = false;
+      _showInstructions = true;
     });
 
     try {
@@ -71,21 +89,38 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
         return;
       }
 
+      // 🔥 Extract test + series meta
+      final test = (data['test'] as Map<String, dynamic>?) ?? {};
+      final series = (data['series'] as Map<String, dynamic>?) ?? {};
+
       setState(() {
         _attemptData = data;
         _questions = List<Map<String, dynamic>>.from(data['questions'] ?? []);
         _answers = List<Map<String, dynamic>>.from(data['answers'] ?? []);
         _markedQuestions = List<String>.from(data['markedQuestionIds'] ?? []);
         _remainingSeconds = data['remainingSeconds'] ?? 0;
+
+        // 🔥 Dynamic values
+        _testTitle = (test['title'] ?? widget.testTitle).toString();
+        _seriesTitle = (series['title'] ?? '').toString();
+        _testInstructions = (test['instructions'] ?? '').toString();
+        _durationMinutes = (test['durationMinutes'] as num?)?.toInt() ?? 0;
+        _questionCount =
+            (test['questionCount'] as num?)?.toInt() ?? _questions.length;
+        _totalMarks = (test['totalMarks'] as num?)?.toInt() ?? 0;
+        _negativeMarks =
+            ((test['negativeMarksPerWrong'] as num?)?.toDouble()) ?? 0.0;
+
         _isLoading = false;
+        _showInstructions = true; // 🔥 instruction screen show
       });
 
-      _startTimer();
-      _startAutoSync();
+      // ❌ Timer abhi start nahi karna — "I am ready to begin" ke baad
     } catch (e) {
       final errorMsg = e.toString().replaceFirst('Exception: ', '');
 
-      if (errorMsg.contains('already submitted') || errorMsg.contains('submitted')) {
+      if (errorMsg.contains('already submitted') ||
+          errorMsg.contains('submitted')) {
         setState(() {
           _isTestSubmitted = true;
           _errorMessage = 'This test has already been submitted.';
@@ -100,6 +135,18 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     }
   }
 
+  // 🔥 User ne "I am ready to begin" tap kiya
+  void _onUserReadyToBegin() {
+    setState(() {
+      _showInstructions = false;
+    });
+
+    // 🔥 AB timer + auto-sync start karo
+    _startTimer();
+    _startAutoSync();
+  }
+
+  // ---------- Timer ----------
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -159,8 +206,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   void _autoSubmitTest() {
     if (_isTestSubmitted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Time expired! Auto-submitting test...'),
+      const SnackBar(
+        content: Text('Time expired! Auto-submitting test...'),
         backgroundColor: AppColors.danger,
         behavior: SnackBarBehavior.floating,
       ),
@@ -206,7 +253,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       final attemptId = _attemptData?['attemptId'] ?? '';
       await _apiService.submitAnswer(attemptId, questionId, optionKey);
     } catch (e) {
-      // Handled quietly
+      // quietly
     }
   }
 
@@ -233,7 +280,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       final marked = _markedQuestions.contains(questionId);
       await _apiService.markQuestion(attemptId, questionId, marked);
     } catch (e) {
-      // Handled quietly
+      // quietly
     }
   }
 
@@ -254,9 +301,12 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   }
 
   int _getAnsweredCount() {
-    return _answers.where((a) => a['selectedOption']?.isNotEmpty ?? false).length;
+    return _answers
+        .where((a) => a['selectedOption']?.isNotEmpty ?? false)
+        .length;
   }
 
+  // ---------- Submit ----------
   void _submitTest() {
     if (_isTestSubmitted) return;
 
@@ -268,14 +318,13 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     final dialogBg = isDark ? const Color(0xFF1A1A2E) : Colors.white;
     final dialogText = isDark ? Colors.white : AppColors.textDark;
     final dialogSubtext = isDark ? Colors.white70 : AppColors.textSecondary;
-    final dialogBorder = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final dialogBorder =
+    isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
 
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 4,
         backgroundColor: dialogBg,
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -322,7 +371,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
               ),
               const SizedBox(height: 20),
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                padding:
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF0A0A0F) : AppColors.bg,
                   borderRadius: BorderRadius.circular(12),
@@ -331,15 +381,18 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: _buildStatItem('Answered', '$answeredCount', AppColors.secondary),
+                      child: _buildStatItem(
+                          'Answered', '$answeredCount', AppColors.secondary),
                     ),
                     Container(width: 1, height: 32, color: dialogBorder),
                     Expanded(
-                      child: _buildStatItem('Unattempted', '$unattempted', AppColors.danger),
+                      child: _buildStatItem(
+                          'Unattempted', '$unattempted', AppColors.danger),
                     ),
                     Container(width: 1, height: 32, color: dialogBorder),
                     Expanded(
-                      child: _buildStatItem('Marked', '${_markedQuestions.length}', Colors.amber.shade800),
+                      child: _buildStatItem('Marked',
+                          '${_markedQuestions.length}', Colors.amber.shade800),
                     ),
                   ],
                 ),
@@ -482,11 +535,13 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     }
   }
 
+  // ---------- Question Palette ----------
   void _showQuestionPalette() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF1A1A2E) : AppColors.bg;
     final textColor = isDark ? Colors.white : AppColors.textDark;
-    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final borderColor =
+    isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
 
     showModalBottomSheet(
       context: context,
@@ -530,7 +585,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: Icon(Icons.close_rounded, size: 20, color: textColor),
+                        icon: Icon(Icons.close_rounded,
+                            size: 20, color: textColor),
                         onPressed: () => Navigator.pop(context),
                       ),
                     ],
@@ -553,7 +609,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                   Expanded(
                     child: GridView.builder(
                       controller: scrollController,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 5,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
@@ -592,12 +649,14 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                               color: bg,
                               borderRadius: BorderRadius.circular(10),
                               border: isCurrent
-                                  ? Border.all(color: AppColors.primary, width: 2.5)
+                                  ? Border.all(
+                                  color: AppColors.primary, width: 2.5)
                                   : border,
                               boxShadow: isCurrent
                                   ? [
                                 BoxShadow(
-                                  color: AppColors.primary.withOpacity(0.3),
+                                  color: AppColors.primary
+                                      .withOpacity(0.3),
                                   blurRadius: 6,
                                 )
                               ]
@@ -627,7 +686,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     );
   }
 
-  Widget _buildPaletteLegend(Color color, String label, {Color textColor = Colors.white, Color? border}) {
+  Widget _buildPaletteLegend(Color color, String label,
+      {Color textColor = Colors.white, Color? border}) {
     return Row(
       children: [
         Container(
@@ -644,23 +704,82 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: textColor == Colors.white ? AppColors.textSecondary : textColor,
+            color: textColor == Colors.white
+                ? AppColors.textSecondary
+                : textColor,
           ),
         ),
       ],
     );
   }
 
+  // ============================================================
+  // BUILD — 2-phase flow
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF0A0A0F) : AppColors.bg;
     final cardColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
-    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final borderColor =
+    isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
     final textColor = isDark ? Colors.white : AppColors.textDark;
-    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final secondaryTextColor =
+    isDark ? Colors.white70 : AppColors.textSecondary;
     final appBarBg = isDark ? const Color(0xFF12121E) : AppColors.background;
 
+    // 🔥 1. Loading
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: isDark ? Colors.white : AppColors.primary,
+          ),
+        ),
+      );
+    }
+
+    // 🔥 2. Error
+    if (_errorMessage != null && !_isTestSubmitted) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        appBar: AppBar(
+          backgroundColor: appBarBg,
+          elevation: 0.5,
+          leading: IconButton(
+            icon: Icon(Icons.close_rounded, color: textColor),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            widget.testTitle,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: textColor,
+            ),
+          ),
+        ),
+        body: _buildErrorView(isDark),
+      );
+    }
+
+    // 🔥🔥🔥 3. INSTRUCTION SCREEN
+    if (_showInstructions && !_isTestSubmitted) {
+      return TestInstructionBeforeStart(
+        testTitle: _testTitle,
+        seriesTitle: _seriesTitle,
+        instructions: _testInstructions,
+        durationMinutes: _durationMinutes,
+        questionCount: _questionCount,
+        totalMarks: _totalMarks,
+        negativeMarks: _negativeMarks,
+        onStart: _onUserReadyToBegin,
+        onExit: () => Navigator.pop(context),
+      );
+    }
+
+    // 🔥 4. TEST SCREEN
     return PopScope(
       canPop: _isTestSubmitted,
       onPopInvokedWithResult: (didPop, result) async {
@@ -669,7 +788,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
         final shouldPop = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
             title: Text(
               'Exit Test?',
@@ -682,14 +802,16 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Resume', style: TextStyle(color: AppColors.primary)),
+                child: const Text('Resume',
+                    style: TextStyle(color: AppColors.primary)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.danger,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () => Navigator.pop(context, true),
                 child: const Text('Exit Test'),
@@ -712,7 +834,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
             onPressed: () => Navigator.maybePop(context),
           ),
           title: Text(
-            _isTestSubmitted ? 'Test Result' : widget.testTitle,
+            _isTestSubmitted ? 'Test Result' : _testTitle, // 🔥 dynamic
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -737,21 +859,14 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
               ),
             if (!_isTestSubmitted && !_isLoading && _questions.isNotEmpty)
               IconButton(
-                icon: Icon(Icons.grid_view_rounded, color: isDark ? Colors.white : AppColors.primary),
+                icon: Icon(Icons.grid_view_rounded,
+                    color: isDark ? Colors.white : AppColors.primary),
                 onPressed: _showQuestionPalette,
               ),
           ],
         ),
-        body: _isLoading
-            ? Center(
-          child: CircularProgressIndicator(
-            color: isDark ? Colors.white : AppColors.primary,
-          ),
-        )
-            : _isTestSubmitted
+        body: _isTestSubmitted
             ? _buildSubmittedView(isDark)
-            : _errorMessage != null
-            ? _buildErrorView(isDark)
             : _questions.isEmpty
             ? Center(
           child: Text(
@@ -762,8 +877,17 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
             : Column(
           children: [
             _buildHeader(isDark),
-            Expanded(child: _buildQuestionView(isDark, cardColor, borderColor, textColor, secondaryTextColor)),
-            _buildBottomNavigation(isDark, textColor, borderColor),
+            Expanded(
+              child: _buildQuestionView(
+                isDark,
+                cardColor,
+                borderColor,
+                textColor,
+                secondaryTextColor,
+              ),
+            ),
+            _buildBottomNavigation(
+                isDark, textColor, borderColor),
           ],
         ),
       ),
@@ -773,9 +897,14 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   Widget _buildHeader(bool isDark) {
     final isLowTime = _remainingSeconds < 300;
     final timerColor = isLowTime ? AppColors.danger : AppColors.secondary;
-    final timerBg = isLowTime ? AppColors.danger.withOpacity(0.1) : AppColors.secondary.withOpacity(0.1);
-    final timerBorder = isLowTime ? AppColors.danger.withOpacity(0.3) : AppColors.secondary.withOpacity(0.3);
-    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final timerBg = isLowTime
+        ? AppColors.danger.withOpacity(0.1)
+        : AppColors.secondary.withOpacity(0.1);
+    final timerBorder = isLowTime
+        ? AppColors.danger.withOpacity(0.3)
+        : AppColors.secondary.withOpacity(0.3);
+    final borderColor =
+    isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -794,11 +923,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.timer_outlined,
-                  size: 16,
-                  color: timerColor,
-                ),
+                Icon(Icons.timer_outlined, size: 16, color: timerColor),
                 const SizedBox(width: 6),
                 Text(
                   _formatTime(_remainingSeconds),
@@ -826,7 +951,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     );
   }
 
-  Widget _buildQuestionView(bool isDark, Color cardColor, Color borderColor, Color textColor, Color secondaryTextColor) {
+  Widget _buildQuestionView(bool isDark, Color cardColor, Color borderColor,
+      Color textColor, Color secondaryTextColor) {
     final question = _questions[_currentQuestionIndex];
     final questionId = question['_id'] ?? '';
     final selectedOption = _getSelectedOption(questionId);
@@ -843,9 +969,12 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.1) : AppColors.primary.withOpacity(0.1),
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -866,7 +995,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: () => _clearSelection(questionId),
-                  icon: const Icon(Icons.clear_rounded, size: 14, color: AppColors.danger),
+                  icon: const Icon(Icons.clear_rounded,
+                      size: 14, color: AppColors.danger),
                   label: const Text(
                     'Clear Selection',
                     style: TextStyle(fontSize: 12, color: AppColors.danger),
@@ -877,25 +1007,38 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                 onTap: () => _toggleMarkQuestion(questionId),
                 borderRadius: BorderRadius.circular(6),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: isMarked ? (isDark ? const Color(0xFF2D1F0A) : Colors.amber.shade50) : cardColor,
+                    color: isMarked
+                        ? (isDark
+                        ? const Color(0xFF2D1F0A)
+                        : Colors.amber.shade50)
+                        : cardColor,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: isMarked ? Colors.amber.shade700 : borderColor),
+                    border: Border.all(
+                        color:
+                        isMarked ? Colors.amber.shade700 : borderColor),
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        isMarked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                        isMarked
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_outline_rounded,
                         size: 15,
-                        color: isMarked ? Colors.amber.shade800 : (isDark ? Colors.white38 : AppColors.textMuted),
+                        color: isMarked
+                            ? Colors.amber.shade800
+                            : (isDark ? Colors.white38 : AppColors.textMuted),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         isMarked ? 'Marked' : 'Mark',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isMarked ? Colors.amber.shade800 : (isDark ? Colors.white38 : AppColors.textMuted),
+                          color: isMarked
+                              ? Colors.amber.shade800
+                              : (isDark ? Colors.white38 : AppColors.textMuted),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -957,18 +1100,18 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     required VoidCallback onTap,
   }) {
     final primaryColor = AppColors.primary;
-    final optionBg = isSelected
-        ? primaryColor.withOpacity(0.08)
-        : cardColor;
-    final optionBorder = isSelected
-        ? primaryColor
-        : borderColor;
+    final optionBg = isSelected ? primaryColor.withOpacity(0.08) : cardColor;
+    final optionBorder = isSelected ? primaryColor : borderColor;
     final optionBorderWidth = isSelected ? 2.0 : 1.0;
     final optionTextColor = isSelected ? primaryColor : textColor;
     final optionWeight = isSelected ? FontWeight.w600 : FontWeight.normal;
-    final circleBg = isSelected ? primaryColor : (isDark ? const Color(0xFF0A0A0F) : AppColors.bg);
+    final circleBg = isSelected
+        ? primaryColor
+        : (isDark ? const Color(0xFF0A0A0F) : AppColors.bg);
     final circleBorder = isSelected ? primaryColor : borderColor;
-    final circleTextColor = isSelected ? Colors.white : (isDark ? Colors.white70 : AppColors.textSecondary);
+    final circleTextColor = isSelected
+        ? Colors.white
+        : (isDark ? Colors.white70 : AppColors.textSecondary);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -976,10 +1119,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       decoration: BoxDecoration(
         color: optionBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: optionBorder,
-          width: optionBorderWidth,
-        ),
+        border: Border.all(color: optionBorder, width: optionBorderWidth),
         boxShadow: isSelected
             ? [
           BoxShadow(
@@ -1045,7 +1185,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     );
   }
 
-  Widget _buildBottomNavigation(bool isDark, Color textColor, Color borderColor) {
+  Widget _buildBottomNavigation(
+      bool isDark, Color textColor, Color borderColor) {
     final isLastQuestion = _currentQuestionIndex == _questions.length - 1;
     final bgColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
     final btnBg = isLastQuestion ? AppColors.secondary : AppColors.primary;
@@ -1070,7 +1211,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: borderColor),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _currentQuestionIndex > 0
                     ? () {
@@ -1080,7 +1222,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                     : null,
                 child: Text(
                   'Previous',
-                  style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: textColor, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -1094,7 +1237,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                   backgroundColor: btnBg,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () {
                   HapticFeedback.lightImpact();
@@ -1106,7 +1250,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                 },
                 child: Text(
                   isLastQuestion ? 'Submit Test' : 'Next Question',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
             ),
@@ -1118,8 +1263,11 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
 
   Widget _buildSubmittedView(bool isDark) {
     final textColor = isDark ? Colors.white : AppColors.textDark;
-    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
-    final circleBg = isDark ? const Color(0xFF1A3A1A) : AppColors.secondary.withOpacity(0.1);
+    final secondaryTextColor =
+    isDark ? Colors.white70 : AppColors.textSecondary;
+    final circleBg = isDark
+        ? const Color(0xFF1A3A1A)
+        : AppColors.secondary.withOpacity(0.1);
 
     return Center(
       child: Padding(
@@ -1159,13 +1307,20 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
               height: 48,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark ? Colors.white : AppColors.primary,
-                  foregroundColor: isDark ? const Color(0xFF0A0A0F) : Colors.white,
+                  backgroundColor:
+                  isDark ? Colors.white : AppColors.primary,
+                  foregroundColor:
+                  isDark ? const Color(0xFF0A0A0F) : Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Back to Home', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                child: const Text(
+                  'Back to Home',
+                  style:
+                  TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
               ),
             ),
           ],
@@ -1175,8 +1330,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   }
 
   Widget _buildErrorView(bool isDark) {
-    final textColor = isDark ? Colors.white : AppColors.textDark;
-    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
+    final secondaryTextColor =
+    isDark ? Colors.white70 : AppColors.textSecondary;
 
     return Center(
       child: Padding(
@@ -1200,9 +1355,11 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
               onPressed: _startTest,
               style: ElevatedButton.styleFrom(
                 backgroundColor: isDark ? Colors.white : AppColors.primary,
-                foregroundColor: isDark ? const Color(0xFF0A0A0F) : Colors.white,
+                foregroundColor:
+                isDark ? const Color(0xFF0A0A0F) : Colors.white,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               child: const Text('Retry'),
             ),

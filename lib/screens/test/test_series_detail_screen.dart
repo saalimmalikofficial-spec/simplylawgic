@@ -1,7 +1,7 @@
 // lib/screens/tests/test_series_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:simplylawgic/screens/dashboard/tabs/test_attempt_screen.dart';
+import 'package:simplylawgic/screens/test/test_attempt_screen.dart';
 import 'package:simplylawgic/services/api_service.dart';
 import 'package:simplylawgic/models/test_series.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
@@ -24,7 +24,7 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
   String? _errorMessage;
   final ApiService _apiService = ApiService();
 
-  // 👇 Website URL
+  // 👇 Website URL (paid unlock ke liye)
   static const String _websiteUrl = 'https://simplylawgic.com/';
 
   @override
@@ -57,7 +57,8 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
 
   int _getTotalDuration() {
     if (_testSeries == null) return 0;
-    return _testSeries!.tests.fold(0, (sum, test) => sum + test.durationMinutes);
+    return _testSeries!.tests
+        .fold(0, (sum, test) => sum + test.durationMinutes);
   }
 
   // ============ OPEN WEBSITE (for paid unlock) ============
@@ -67,7 +68,7 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
     try {
       final launched = await launchUrl(
         url,
-        mode: LaunchMode.externalApplication, // opens in browser
+        mode: LaunchMode.externalApplication,
       );
 
       if (!launched) {
@@ -93,6 +94,7 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
       return;
     }
 
+    // 🔥 Specific test start karo
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -138,7 +140,11 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
         shadowColor,
         appBarBg,
       ),
+      // 🔥 Bottom bar sirf tab dikhao jab:
+      //    1. Paid ho (Unlock Now ke liye), ya
+      //    2. Sirf 1 test ho (direct start ke liye)
       bottomNavigationBar: _testSeries != null
+          ? ((_testSeries!.isPaid) || (_testSeries!.tests.length <= 1))
           ? _buildBottomPurchaseBar(
         isDark,
         cardColor,
@@ -147,12 +153,12 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
         textColor,
         secondaryTextColor,
       )
+          : null
           : null,
     );
   }
 
   Widget _buildErrorView(bool isDark) {
-    final textColor = isDark ? Colors.white : AppColors.textDark;
     final secondaryTextColor =
     isDark ? Colors.white70 : AppColors.textSecondary;
 
@@ -235,8 +241,11 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                   ? Colors.white.withOpacity(0.15)
                   : Colors.black.withOpacity(0.3),
               child: IconButton(
-                icon: const Icon(Icons.arrow_back,
-                    color: Colors.white, size: 20),
+                icon: const Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -304,11 +313,15 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          _buildHeaderBadge(Icons.assignment_outlined,
-                              '${testSeries.testCount} Tests'),
+                          _buildHeaderBadge(
+                            Icons.assignment_outlined,
+                            '${testSeries.testCount} Tests',
+                          ),
                           const SizedBox(width: 16),
-                          _buildHeaderBadge(Icons.timer_outlined,
-                              '${_getTotalDuration()} mins'),
+                          _buildHeaderBadge(
+                            Icons.timer_outlined,
+                            '${_getTotalDuration()} mins',
+                          ),
                         ],
                       ),
                     ],
@@ -411,7 +424,7 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Tests Items
+                // Tests Items — each has its own Start button
                 ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -492,6 +505,9 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
     );
   }
 
+  // ============================================================
+  // 🔥 TEST CARD — with prominent "Start" button per test
+  // ============================================================
   Widget _buildTestCard({
     required Test test,
     required bool isDark,
@@ -501,9 +517,6 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
     required Color textColor,
     required Color secondaryTextColor,
   }) {
-    final chipColor =
-    isDark ? const Color(0xFF12121E) : AppColors.primary.withOpacity(0.1);
-    final chipTextColor = isDark ? Colors.white70 : AppColors.primary;
     final warningBg =
     isDark ? const Color(0xFF2D1F0A) : AppColors.warning.withOpacity(0.12);
     final warningText =
@@ -519,7 +532,9 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Test number badge
               Container(
                 width: 36,
                 height: 36,
@@ -541,6 +556,8 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                 ),
               ),
               const SizedBox(width: 12),
+
+              // Title + meta
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -552,6 +569,8 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                         fontWeight: FontWeight.bold,
                         color: textColor,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     SingleChildScrollView(
@@ -582,24 +601,42 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              InkWell(
-                onTap: () => _startTest(test),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white : AppColors.primary,
+
+              // 🔥🔥🔥 START BUTTON — per test
+              ElevatedButton(
+                onPressed: () => _startTest(test),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? Colors.white : AppColors.primary,
+                  foregroundColor:
+                  isDark ? const Color(0xFF0A0A0F) : Colors.white,
+                  elevation: 0,
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(
-                    Icons.play_arrow_rounded,
-                    color: isDark ? const Color(0xFF0A0A0F) : Colors.white,
-                    size: 20,
-                  ),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.play_arrow_rounded, size: 16),
+                    SizedBox(width: 2),
+                    Text(
+                      'Start',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
+
+          // Instructions box (agar ho)
           if (test.instructions.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
@@ -609,23 +646,33 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 14,
-                    color: warningText,
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.info_outline_rounded,
+                      size: 14,
+                      color: warningText,
+                    ),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       test.instructions,
-                      style: TextStyle(fontSize: 11, color: warningText),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: warningText,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ],
+
+          // Negative marking (agar ho)
           if (test.negativeMarksPerWrong > 0) ...[
             const SizedBox(height: 6),
             Row(
@@ -636,9 +683,11 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
                   color: dangerText,
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  'Negative Marking: -${test.negativeMarksPerWrong} mark per wrong answer',
-                  style: TextStyle(fontSize: 11, color: dangerText),
+                Expanded(
+                  child: Text(
+                    'Negative Marking: -${test.negativeMarksPerWrong} mark per wrong answer',
+                    style: TextStyle(fontSize: 11, color: dangerText),
+                  ),
                 ),
               ],
             ),
@@ -670,6 +719,10 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
     );
   }
 
+  // ============================================================
+  // BOTTOM PURCHASE BAR
+  // (dikhega sirf paid series ya 1 test wale free series me)
+  // ============================================================
   Widget _buildBottomPurchaseBar(
       bool isDark,
       Color cardColor,
@@ -741,9 +794,10 @@ class _TestSeriesDetailScreenState extends State<TestSeriesDetailScreen> {
               ),
               onPressed: () {
                 if (testSeries.isPaid) {
-                  // 👇 Paid → open website
+                  // Paid → open website
                   _openWebsite();
                 } else if (testSeries.tests.isNotEmpty) {
+                  // Free + 1 test → direct start
                   _startTest(testSeries.tests.first);
                 }
               },

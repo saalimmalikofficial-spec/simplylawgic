@@ -5,7 +5,7 @@ import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/screens/auth/sign_in_screen.dart';
 import 'package:simplylawgic/screens/dashboard/dashboard_screen.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
-import 'package:simplylawgic/main.dart'; // For themeManager
+import 'package:simplylawgic/main.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,7 +14,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -31,19 +32,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   void _loadTheme() {
-    // Load theme from storage
     _storage.getThemePreference().then((isDark) {
       if (mounted) {
         setState(() {
           _isDarkMode = isDark ?? false;
         });
-        // ✅ Update global theme manager - setTheme available hai
         if (isDark != null) {
           themeManager.setTheme(isDark);
         }
       }
     }).catchError((e) {
-      // ✅ Handle error if setTheme fails
       debugPrint('Error loading theme: $e');
     });
   }
@@ -120,12 +118,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     }
   }
 
-  // Toggle theme from splash screen
   void _toggleTheme() {
     setState(() {
       _isDarkMode = !_isDarkMode;
     });
-    // ✅ toggleTheme available hai
     themeManager.toggleTheme();
     _storage.saveThemePreference(_isDarkMode);
   }
@@ -133,7 +129,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final isDark = _isDarkMode;
-    final backgroundColor = isDark ? const Color(0xFF0A0A0F) : const Color(0xFFFFFFFF);
     final textColor = isDark ? Colors.white : Colors.black;
     final subtitleColor = isDark ? Colors.white70 : Colors.black54;
     final gradientColors = isDark
@@ -171,7 +166,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo with animation
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: SlideTransition(
@@ -201,10 +195,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
 
-                // App Name
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: Column(
@@ -231,10 +223,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 40),
 
-                // Loading Indicator
                 SizedBox(
                   height: 30,
                   width: 30,
@@ -246,16 +236,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 40),
 
-                // Theme Toggle Button
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: GestureDetector(
                     onTap: _toggleTheme,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withOpacity(0.1)
@@ -277,9 +266,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                            isDark
+                                ? 'Switch to Light Mode'
+                                : 'Switch to Dark Mode',
                             style: TextStyle(
-                              color: isDark ? Colors.white70 : AppColors.textSecondary,
+                              color: isDark
+                                  ? Colors.white70
+                                  : AppColors.textSecondary,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),

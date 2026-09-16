@@ -1,7 +1,7 @@
 // lib/screens/dashboard/tabs/tests_tab.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:simplylawgic/screens/dashboard/tabs/test_series_detail_screen.dart';
+import 'package:simplylawgic/screens/test/test_series_detail_screen.dart';
 import 'package:simplylawgic/services/api_service.dart';
 import 'package:simplylawgic/models/test_series.dart';
 import 'package:simplylawgic/utils/app_colors.dart';

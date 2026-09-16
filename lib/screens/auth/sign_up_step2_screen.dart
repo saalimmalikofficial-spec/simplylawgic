@@ -7,6 +7,9 @@ import 'package:simplylawgic/utils/app_colors.dart';
 import 'package:simplylawgic/screens/dashboard/dashboard_screen.dart';
 import 'package:simplylawgic/models/student_model.dart';
 
+import '../dashboard/judiciary_exam_constants.dart';
+
+
 class SignUpStep2Screen extends StatefulWidget {
   final String phone;
   final String phoneVerificationToken;
@@ -33,6 +36,11 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Exam selection state
+  String? _selectedExamValue;
+  String? _selectedExamLabel;
+  String? _examErrorText;
+
   final ApiService _apiService = ApiService();
   final StorageService _storage = StorageService();
 
@@ -46,7 +54,13 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
   }
 
   Future<void> _completeSignUp() async {
-    if (!_formKey.currentState!.validate()) {
+    final isFormValid = _formKey.currentState!.validate();
+
+    setState(() {
+      _examErrorText = _selectedExamValue == null ? 'Please select the exam you are preparing for' : null;
+    });
+
+    if (!isFormValid || _selectedExamValue == null) {
       return;
     }
 
@@ -68,7 +82,7 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
         'email': _emailController.text.trim(),
         'password': _passwordController.text,
         'phone': widget.phone,
-        'preparingForExam': 'delhi',
+        'preparingForExam': _selectedExamValue,
         'phoneVerificationToken': widget.phoneVerificationToken,
       };
 
@@ -137,6 +151,120 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
         });
       }
     }
+  }
+
+  void _openExamPicker({required bool isDark, required Color textColor, required Color secondaryTextColor, required Color cardColor, required Color borderColor}) {
+    if (_isLoading) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF12121A) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: secondaryTextColor.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          "Select exam",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: textColor),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(Icons.close_rounded, color: secondaryTextColor),
+                          onPressed: () => Navigator.pop(sheetContext),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      children: [
+                        _ExamSectionHeader(title: "State Judicial Services", color: secondaryTextColor),
+                        ...STATE_JUDICIAL_SERVICES.map((e) => _ExamOptionTile(
+                          label: e['label']!,
+                          selected: _selectedExamValue == e['value'],
+                          textColor: textColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                          onTap: () {
+                            setState(() {
+                              _selectedExamValue = e['value'];
+                              _selectedExamLabel = e['label'];
+                              _examErrorText = null;
+                            });
+                            Navigator.pop(sheetContext);
+                          },
+                        )),
+                        const SizedBox(height: 16),
+                        _ExamSectionHeader(title: "Union Territory Judicial Services", color: secondaryTextColor),
+                        ...UNION_TERRITORY_JUDICIAL_SERVICES.map((e) => _ExamOptionTile(
+                          label: e['label']!,
+                          selected: _selectedExamValue == e['value'],
+                          textColor: textColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                          onTap: () {
+                            setState(() {
+                              _selectedExamValue = e['value'];
+                              _selectedExamLabel = e['label'];
+                              _examErrorText = null;
+                            });
+                            Navigator.pop(sheetContext);
+                          },
+                        )),
+                        const SizedBox(height: 16),
+                        _ExamSectionHeader(title: "Other", color: secondaryTextColor),
+                        ...OTHER_JUDICIARY_OPTIONS.map((e) => _ExamOptionTile(
+                          label: e['label']!,
+                          selected: _selectedExamValue == e['value'],
+                          textColor: textColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                          onTap: () {
+                            setState(() {
+                              _selectedExamValue = e['value'];
+                              _selectedExamLabel = e['label'];
+                              _examErrorText = null;
+                            });
+                            Navigator.pop(sheetContext);
+                          },
+                        )),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -349,6 +477,64 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
                         : () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                   ),
                 ),
+                const SizedBox(height: 20),
+
+                Text(
+                  "Preparing for",
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: secondaryTextColor),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => _openExamPicker(
+                    isDark: isDark,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
+                    cardColor: cardColor,
+                    borderColor: borderColor,
+                  ),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _examErrorText != null ? AppColors.error : borderColor,
+                        width: _examErrorText != null ? 1.4 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.gavel_rounded, size: 20, color: secondaryTextColor),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _selectedExamLabel ?? "Select the exam you're preparing for",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: _selectedExamLabel != null
+                                  ? textColor
+                                  : secondaryTextColor.withOpacity(0.6),
+                              fontWeight: _selectedExamLabel != null ? FontWeight.w600 : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                        Icon(Icons.keyboard_arrow_down_rounded, color: secondaryTextColor),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_examErrorText != null) ...[
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      _examErrorText!,
+                      style: const TextStyle(color: AppColors.error, fontSize: 12),
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 32),
 
@@ -472,6 +658,76 @@ class _SignUpStep2ScreenState extends State<SignUpStep2Screen> {
             borderSide: const BorderSide(color: AppColors.error, width: 1.6)
         ),
         errorStyle: const TextStyle(color: AppColors.error, fontSize: 12),
+      ),
+    );
+  }
+}
+
+class _ExamSectionHeader extends StatelessWidget {
+  final String title;
+  final Color color;
+
+  const _ExamSectionHeader({required this.title, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 4),
+      child: Text(
+        title,
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.3),
+      ),
+    );
+  }
+}
+
+class _ExamOptionTile extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color textColor;
+  final Color cardColor;
+  final Color borderColor;
+  final VoidCallback onTap;
+
+  const _ExamOptionTile({
+    required this.label,
+    required this.selected,
+    required this.textColor,
+    required this.cardColor,
+    required this.borderColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary.withOpacity(0.1) : cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: selected ? AppColors.primary : borderColor),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? AppColors.primary : textColor,
+                  ),
+                ),
+              ),
+              if (selected) const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }
