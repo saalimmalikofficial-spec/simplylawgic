@@ -10,6 +10,8 @@ class Student {
   final String? avatarUrl;
   final String? referralCode;
   final num? walletBalance;
+  final String? accountStatus;
+  final bool? profileComplete;
 
   Student({
     required this.id,
@@ -22,20 +24,27 @@ class Student {
     this.avatarUrl,
     this.referralCode,
     this.walletBalance,
+    this.accountStatus,
+    this.profileComplete,
   });
 
   factory Student.fromJson(Map<String, dynamic> json) {
     return Student(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      email: json['email'] ?? '',
-      phone: json['phone'] ?? '',
-      preparingForExam: json['preparingForExam'] ?? '',
-      preparingForExamLabel: json['preparingForExamLabel'] ?? '',
-      authProvider: json['authProvider'] ?? '',
-      avatarUrl: json['avatarUrl'],
-      referralCode: json['referralCode'],
-      walletBalance: json['walletBalance'],
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      preparingForExam: json['preparingForExam']?.toString() ?? '',
+      preparingForExamLabel:
+      json['preparingForExamLabel']?.toString() ?? '',
+      authProvider: json['authProvider']?.toString() ?? 'local',
+      avatarUrl: json['avatarUrl']?.toString(),
+      referralCode: json['referralCode']?.toString(),
+      walletBalance: _parseNum(json['walletBalance']),
+      accountStatus: json['accountStatus']?.toString(),
+      profileComplete: json['profileComplete'] is bool
+          ? json['profileComplete'] as bool
+          : null,
     );
   }
 
@@ -51,6 +60,8 @@ class Student {
       'avatarUrl': avatarUrl,
       'referralCode': referralCode,
       'walletBalance': walletBalance,
+      'accountStatus': accountStatus,
+      'profileComplete': profileComplete,
     };
   }
 
@@ -65,6 +76,8 @@ class Student {
     String? avatarUrl,
     String? referralCode,
     num? walletBalance,
+    String? accountStatus,
+    bool? profileComplete,
   }) {
     return Student(
       id: id ?? this.id,
@@ -78,9 +91,42 @@ class Student {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       referralCode: referralCode ?? this.referralCode,
       walletBalance: walletBalance ?? this.walletBalance,
+      accountStatus: accountStatus ?? this.accountStatus,
+      profileComplete: profileComplete ?? this.profileComplete,
     );
   }
+
+  // Safe numeric parsing
+  static num? _parseNum(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value;
+    if (value is String) return num.tryParse(value);
+    return null;
+  }
+
+  // Formatted wallet balance (Indian format)
+  String get formattedWalletBalance {
+    final balance = walletBalance?.toInt() ?? 0;
+    final str = balance.toString();
+    if (str.length <= 3) return str;
+    final lastThree = str.substring(str.length - 3);
+    final otherNumbers = str.substring(0, str.length - 3);
+    final formatted = otherNumbers.replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{2})+$)'),
+          (m) => '${m[1]},',
+    );
+    return '$formatted,$lastThree';
+  }
+
+  // Avatar fallback initial
+  String get initial =>
+      name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'U';
+
+  @override
+  String toString() =>
+      'Student(id: $id, name: $name, email: $email, wallet: $walletBalance)';
 }
+
 // lib/models/sign_in_response.dart
 class SignInResponse {
   final String message;

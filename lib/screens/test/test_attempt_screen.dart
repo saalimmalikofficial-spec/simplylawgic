@@ -1,8 +1,12 @@
 // lib/screens/tests/test_attempt_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:simplylawgic/models/attempt_statusResponse.dart';
+
 import 'package:simplylawgic/screens/test/test_instruction_before_start.dart';
+import 'package:simplylawgic/screens/test/test_result_screen.dart';
 import 'package:simplylawgic/services/api_service.dart';
+import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
 
 import 'dart:async';
@@ -37,11 +41,10 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   Timer? _timer;
   Timer? _syncTimer;
   final ApiService _apiService = ApiService();
+  final StorageService _storage = StorageService();
 
-  // 🔥🔥🔥 2-phase flow
   bool _showInstructions = true;
 
-  // 🔥 Dynamic test meta from API
   String _testTitle = '';
   String _seriesTitle = '';
   String _testInstructions = '';
@@ -49,6 +52,10 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
   int _questionCount = 0;
   int _totalMarks = 0;
   double _negativeMarks = 0.0;
+
+  AttemptStatusResponse? _alreadyCompletedData;
+  AttemptStatusResponse? _submittedResult;
+  bool _isFetchingResult = false;
 
   @override
   void initState() {
@@ -63,8 +70,20 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     super.dispose();
   }
 
+  String _capitalizeTitle(String title) {
+    return title.split(' ').map((word) {
+      if (word.isEmpty) return word;
+      if (word.length >= 2 &&
+          word == word.toUpperCase() &&
+          RegExp(r'^[A-Z]+$').hasMatch(word)) {
+        return word;
+      }
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+  }
+
   // ============================================================
-  // 🔥 _startTest — API se data lekar instruction screen dikhao
+  // _startTest
   // ============================================================
   Future<void> _startTest() async {
     setState(() {
@@ -72,35 +91,72 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       _errorMessage = null;
       _isTestSubmitted = false;
       _showInstructions = true;
+      _alreadyCompletedData = null;
+      _submittedResult = null;
     });
 
     try {
+      final locallyStarted = await _storage.hasTestStarted(widget.testId);
+
+      final status = await _apiService.getAttemptStatus(
+        slug: widget.seriesSlug,
+        testId: widget.testId,
+      );
+
+      if (!mounted) return;
+
+      if (status.isCompleted && !status.canRetake) {
+        await _storage.clearTestStarted(widget.testId);
+
+        setState(() {
+          _alreadyCompletedData = status;
+          _testTitle = status.test?.title ?? widget.testTitle;
+          _seriesTitle = status.series?.title ?? '';
+          _durationMinutes = status.test?.durationMinutes ?? 0;
+          _questionCount = status.breakdown.length;
+          _totalMarks = status.maxScore;
+          _negativeMarks =
+              (status.test?.negativeMarksPerWrong ?? 0).toDouble();
+          _isLoading = false;
+          _showInstructions = true;
+        });
+        return;
+      }
+
       final data = await _apiService.startTestAttempt(
         widget.seriesSlug,
         widget.testId,
       );
 
-      if (data['status'] == 'submitted' || data['status'] == 'completed') {
+      if ((data['status'] == 'submitted' || data['status'] == 'completed') &&
+          data['canRetake'] != true) {
+        await _storage.clearTestStarted(widget.testId);
+        final fallbackStatus = await _apiService.getAttemptStatus(
+          slug: widget.seriesSlug,
+          testId: widget.testId,
+        );
+        if (!mounted) return;
         setState(() {
-          _isTestSubmitted = true;
-          _errorMessage = 'This test has already been submitted.';
+          _alreadyCompletedData = fallbackStatus;
           _isLoading = false;
+          _showInstructions = true;
         });
         return;
       }
 
-      // 🔥 Extract test + series meta
       final test = (data['test'] as Map<String, dynamic>?) ?? {};
       final series = (data['series'] as Map<String, dynamic>?) ?? {};
+
+      final isResuming = status.isInProgress || locallyStarted;
 
       setState(() {
         _attemptData = data;
         _questions = List<Map<String, dynamic>>.from(data['questions'] ?? []);
         _answers = List<Map<String, dynamic>>.from(data['answers'] ?? []);
-        _markedQuestions = List<String>.from(data['markedQuestionIds'] ?? []);
+        _markedQuestions =
+        List<String>.from(data['markedQuestionIds'] ?? []);
         _remainingSeconds = data['remainingSeconds'] ?? 0;
 
-        // 🔥 Dynamic values
         _testTitle = (test['title'] ?? widget.testTitle).toString();
         _seriesTitle = (series['title'] ?? '').toString();
         _testInstructions = (test['instructions'] ?? '').toString();
@@ -112,41 +168,67 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
             ((test['negativeMarksPerWrong'] as num?)?.toDouble()) ?? 0.0;
 
         _isLoading = false;
-        _showInstructions = true; // 🔥 instruction screen show
+        _showInstructions = !isResuming;
       });
 
-      // ❌ Timer abhi start nahi karna — "I am ready to begin" ke baad
+      if (isResuming) {
+        _startTimer();
+        _startAutoSync();
+      }
     } catch (e) {
       final errorMsg = e.toString().replaceFirst('Exception: ', '');
 
-      if (errorMsg.contains('already submitted') ||
-          errorMsg.contains('submitted')) {
-        setState(() {
-          _isTestSubmitted = true;
-          _errorMessage = 'This test has already been submitted.';
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = errorMsg;
-          _isLoading = false;
-        });
+      if (errorMsg.toLowerCase().contains('already') &&
+          errorMsg.toLowerCase().contains('submit')) {
+        try {
+          await _storage.clearTestStarted(widget.testId);
+          final fallbackStatus = await _apiService.getAttemptStatus(
+            slug: widget.seriesSlug,
+            testId: widget.testId,
+          );
+          if (!mounted) return;
+
+          if (fallbackStatus.canRetake) {
+            setState(() {
+              _errorMessage = errorMsg;
+              _isLoading = false;
+            });
+            return;
+          }
+
+          setState(() {
+            _alreadyCompletedData = fallbackStatus;
+            _testTitle = fallbackStatus.test?.title ?? widget.testTitle;
+            _seriesTitle = fallbackStatus.series?.title ?? '';
+            _durationMinutes = fallbackStatus.test?.durationMinutes ?? 0;
+            _questionCount = fallbackStatus.breakdown.length;
+            _totalMarks = fallbackStatus.maxScore;
+            _negativeMarks =
+                (fallbackStatus.test?.negativeMarksPerWrong ?? 0).toDouble();
+            _isLoading = false;
+            _showInstructions = true;
+          });
+          return;
+        } catch (_) {}
       }
+
+      setState(() {
+        _errorMessage = errorMsg;
+        _isLoading = false;
+      });
     }
   }
 
-  // 🔥 User ne "I am ready to begin" tap kiya
-  void _onUserReadyToBegin() {
+  Future<void> _onUserReadyToBegin() async {
+    await _storage.markTestStarted(widget.testId);
+
     setState(() {
       _showInstructions = false;
     });
-
-    // 🔥 AB timer + auto-sync start karo
     _startTimer();
     _startAutoSync();
   }
 
-  // ---------- Timer ----------
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -186,20 +268,14 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
 
     if (answersToSync.isEmpty) return;
 
-    setState(() {
-      _isSyncing = true;
-    });
+    setState(() => _isSyncing = true);
 
     try {
       await _apiService.syncAnswers(attemptId, answersToSync);
     } catch (e) {
       debugPrint('Sync error: $e');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSyncing = false;
-        });
-      }
+      if (mounted) setState(() => _isSyncing = false);
     }
   }
 
@@ -217,7 +293,6 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
 
   void _selectOption(String questionId, String optionKey) {
     if (_isTestSubmitted) return;
-
     HapticFeedback.lightImpact();
 
     setState(() {
@@ -239,27 +314,21 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     HapticFeedback.selectionClick();
     setState(() {
       final index = _answers.indexWhere((a) => a['questionId'] == questionId);
-      if (index != -1) {
-        _answers[index]['selectedOption'] = '';
-      }
+      if (index != -1) _answers[index]['selectedOption'] = '';
     });
     _submitAnswer(questionId, '');
   }
 
   Future<void> _submitAnswer(String questionId, String optionKey) async {
     if (_isTestSubmitted) return;
-
     try {
       final attemptId = _attemptData?['attemptId'] ?? '';
       await _apiService.submitAnswer(attemptId, questionId, optionKey);
-    } catch (e) {
-      // quietly
-    }
+    } catch (e) {}
   }
 
   void _toggleMarkQuestion(String questionId) {
     if (_isTestSubmitted) return;
-
     HapticFeedback.selectionClick();
 
     setState(() {
@@ -274,14 +343,11 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
 
   Future<void> _markQuestion(String questionId) async {
     if (_isTestSubmitted) return;
-
     try {
       final attemptId = _attemptData?['attemptId'] ?? '';
       final marked = _markedQuestions.contains(questionId);
       await _apiService.markQuestion(attemptId, questionId, marked);
-    } catch (e) {
-      // quietly
-    }
+    } catch (e) {}
   }
 
   String _getSelectedOption(String questionId) {
@@ -292,21 +358,15 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     return answer['selectedOption'] ?? '';
   }
 
-  bool _isQuestionAnswered(String questionId) {
-    return _getSelectedOption(questionId).isNotEmpty;
-  }
+  bool _isQuestionAnswered(String questionId) =>
+      _getSelectedOption(questionId).isNotEmpty;
 
-  bool _isQuestionMarked(String questionId) {
-    return _markedQuestions.contains(questionId);
-  }
+  bool _isQuestionMarked(String questionId) =>
+      _markedQuestions.contains(questionId);
 
-  int _getAnsweredCount() {
-    return _answers
-        .where((a) => a['selectedOption']?.isNotEmpty ?? false)
-        .length;
-  }
+  int _getAnsweredCount() =>
+      _answers.where((a) => a['selectedOption']?.isNotEmpty ?? false).length;
 
-  // ---------- Submit ----------
   void _submitTest() {
     if (_isTestSubmitted) return;
 
@@ -355,7 +415,6 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
                       color: dialogText,
-                      letterSpacing: -0.3,
                     ),
                   ),
                 ],
@@ -415,9 +474,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                         child: const Text(
                           'Review',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
+                              fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
@@ -442,9 +499,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                         child: const Text(
                           'Submit Now',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
+                              fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -483,21 +538,47 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     );
   }
 
+  // ============================================================
+  // ✅ UPDATED: SUBMIT — with answers body
+  // ============================================================
   void _submitTestAttempt() async {
     if (_isTestSubmitted) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
+      // Step 1: Sync (safety)
       await _syncAnswers();
 
+      // Step 2: Answers collect karo (non-empty only)
+      final answersToSubmit = _answers
+          .where((a) => a['selectedOption']?.isNotEmpty ?? false)
+          .map((a) => {
+        'questionId': a['questionId'],
+        'selectedOption': a['selectedOption'],
+      })
+          .toList();
+
+      print('');
+      print('========================================');
+      print('SUBMITTING TEST');
+      print('Total answers: ${_answers.length}');
+      print('Non-empty answers: ${answersToSubmit.length}');
+      print('Body: $answersToSubmit');
+      print('========================================');
+
       final attemptId = _attemptData?['attemptId'] ?? '';
-      await _apiService.submitTest(attemptId);
+
+      // Step 3: Submit with answers
+      await _apiService.submitTest(
+        attemptId,
+        answers: answersToSubmit,
+      );
 
       _timer?.cancel();
       _syncTimer?.cancel();
+
+      await _storage.clearTestStarted(widget.testId);
 
       setState(() {
         _isTestSubmitted = true;
@@ -513,6 +594,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
           ),
         );
       }
+
+      _fetchSubmittedResult();
     } catch (e) {
       final errorMsg = e.toString().replaceFirst('Exception: ', '');
 
@@ -532,10 +615,51 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
           ),
         );
       }
+
+      if (_isTestSubmitted) {
+        _fetchSubmittedResult();
+      }
     }
   }
 
-  // ---------- Question Palette ----------
+  Future<void> _fetchSubmittedResult() async {
+    try {
+      setState(() => _isFetchingResult = true);
+
+      final status = await _apiService.getAttemptStatus(
+        slug: widget.seriesSlug,
+        testId: widget.testId,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _submittedResult = status;
+        _isFetchingResult = false;
+      });
+    } catch (e) {
+      debugPrint('Failed to fetch submitted result: $e');
+      if (mounted) setState(() => _isFetchingResult = false);
+    }
+  }
+
+  void _openFullReport() {
+    if (_submittedResult == null) {
+      _fetchSubmittedResult();
+      return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TestResultScreen(
+          result: _submittedResult!,
+          seriesSlug: widget.seriesSlug,
+          testId: widget.testId,
+        ),
+      ),
+    );
+  }
+
   void _showQuestionPalette() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF1A1A2E) : AppColors.bg;
@@ -713,9 +837,6 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     );
   }
 
-  // ============================================================
-  // BUILD — 2-phase flow
-  // ============================================================
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -726,9 +847,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
     final textColor = isDark ? Colors.white : AppColors.textDark;
     final secondaryTextColor =
     isDark ? Colors.white70 : AppColors.textSecondary;
-    final appBarBg = isDark ? const Color(0xFF12121E) : AppColors.background;
 
-    // 🔥 1. Loading
     if (_isLoading) {
       return Scaffold(
         backgroundColor: bgColor,
@@ -740,19 +859,34 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       );
     }
 
-    // 🔥 2. Error
+    if (_alreadyCompletedData != null) {
+      return TestInstructionBeforeStart(
+        testTitle: _testTitle,
+        seriesTitle: _seriesTitle,
+        instructions: _testInstructions,
+        durationMinutes: _durationMinutes,
+        questionCount: _questionCount,
+        totalMarks: _totalMarks,
+        negativeMarks: _negativeMarks,
+        alreadyCompletedData: _alreadyCompletedData,
+        onStart: () {},
+        onExit: () => Navigator.pop(context),
+      );
+    }
+
     if (_errorMessage != null && !_isTestSubmitted) {
       return Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          backgroundColor: appBarBg,
+          backgroundColor:
+          isDark ? const Color(0xFF12121E) : AppColors.background,
           elevation: 0.5,
           leading: IconButton(
             icon: Icon(Icons.close_rounded, color: textColor),
             onPressed: () => Navigator.pop(context),
           ),
           title: Text(
-            widget.testTitle,
+            _capitalizeTitle(widget.testTitle),
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -764,7 +898,6 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       );
     }
 
-    // 🔥🔥🔥 3. INSTRUCTION SCREEN
     if (_showInstructions && !_isTestSubmitted) {
       return TestInstructionBeforeStart(
         testTitle: _testTitle,
@@ -779,7 +912,6 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       );
     }
 
-    // 🔥 4. TEST SCREEN
     return PopScope(
       canPop: _isTestSubmitted,
       onPopInvokedWithResult: (didPop, result) async {
@@ -790,10 +922,12 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
           builder: (context) => AlertDialog(
             shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+            backgroundColor:
+            isDark ? const Color(0xFF1A1A2E) : Colors.white,
             title: Text(
               'Exit Test?',
-              style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+              style:
+              TextStyle(fontWeight: FontWeight.bold, color: textColor),
             ),
             content: Text(
               'Your progress is saved dynamically. Are you sure you want to exit?',
@@ -827,14 +961,15 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-          backgroundColor: appBarBg,
+          backgroundColor:
+          isDark ? const Color(0xFF12121E) : AppColors.background,
           elevation: 0.5,
           leading: IconButton(
             icon: Icon(Icons.close_rounded, color: textColor),
             onPressed: () => Navigator.maybePop(context),
           ),
           title: Text(
-            _isTestSubmitted ? 'Test Result' : _testTitle, // 🔥 dynamic
+            _isTestSubmitted ? 'Test Result' : _capitalizeTitle(_testTitle),
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -886,8 +1021,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                 secondaryTextColor,
               ),
             ),
-            _buildBottomNavigation(
-                isDark, textColor, borderColor),
+            _buildBottomNavigation(isDark, textColor, borderColor),
           ],
         ),
       ),
@@ -1038,7 +1172,9 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                           fontSize: 12,
                           color: isMarked
                               ? Colors.amber.shade800
-                              : (isDark ? Colors.white38 : AppColors.textMuted),
+                              : (isDark
+                              ? Colors.white38
+                              : AppColors.textMuted),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1222,8 +1358,8 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
                     : null,
                 child: Text(
                   'Previous',
-                  style: TextStyle(
-                      color: textColor, fontWeight: FontWeight.bold),
+                  style:
+                  TextStyle(color: textColor, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -1270,7 +1406,7 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
         : AppColors.secondary.withOpacity(0.1);
 
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1300,26 +1436,68 @@ class _TestAttemptScreenState extends State<TestAttemptScreen> {
             Text(
               'You completed ${_getAnsweredCount()} out of ${_questions.length} questions.',
               style: TextStyle(fontSize: 14, color: secondaryTextColor),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
+              height: 52,
+              child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                  isDark ? Colors.white : AppColors.primary,
+                  backgroundColor: isDark ? Colors.white : AppColors.primary,
                   foregroundColor:
                   isDark ? const Color(0xFF0A0A0F) : Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () => Navigator.pop(context),
+                onPressed: _isFetchingResult ? null : _openFullReport,
+                icon: _isFetchingResult
+                    ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: isDark
+                        ? const Color(0xFF0A0A0F)
+                        : Colors.white,
+                  ),
+                )
+                    : const Icon(Icons.assessment_rounded, size: 20),
+                label: Text(
+                  _isFetchingResult ? 'Loading Report...' : 'View Full Report',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.15)
+                        : AppColors.border,
+                    width: 1,
+                  ),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  foregroundColor: textColor,
+                ),
+                onPressed: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
                 child: const Text(
                   'Back to Home',
-                  style:
-                  TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14.5,
+                  ),
                 ),
               ),
             ),

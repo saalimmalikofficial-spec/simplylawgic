@@ -12,7 +12,52 @@
           "package_name": "com.bettlebyte.simplylawgic"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "290991641035-2p2t16jocbidasfvrh7t5au9kd8vcft0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bettlebyte.simplylawgic",
+            "certificate_hash": "fcd8523f0f24828042b31db485feb20d69fe899f"
+          }
+        },
+        {
+          "client_id": "290991641035-4dj6qidcc7kbfm9r6vo1pp65nu3isvm9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bettlebyte.simplylawgic",
+            "certificate_hash": "0ace6164da9cf98d24c321c11e2dd1725bdcbf27"
+          }
+        },
+        {
+          "client_id": "290991641035-9uv27qra7onivpd67g0ham5jd1u1jd3a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bettlebyte.simplylawgic",
+            "certificate_hash": "894d5d9b2fbfdc6652dcf8edd3a2471284b22ddc"
+          }
+        },
+        {
+          "client_id": "290991641035-a7i34l36ijub6g77solb46ejickblidt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bettlebyte.simplylawgic",
+            "certificate_hash": "0ed16e4c986354bba93ad8915d839fb3410f5949"
+          }
+        },
+        {
+          "client_id": "290991641035-sa1s6dtc7ulak9p5h1qp800seadlc1cn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bettlebyte.simplylawgic",
+            "certificate_hash": "c620d4f3ed70455fcdbfa00855c2ce6bcd7c3e59"
+          }
+        },
+        {
+          "client_id": "290991641035-pj5nk604ln9buo6v72t7d48iaas79abk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD_Mg2diS-H7TfQcUk3MAGOYuA54yFsntM"
@@ -20,7 +65,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "290991641035-pj5nk604ln9buo6v72t7d48iaas79abk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

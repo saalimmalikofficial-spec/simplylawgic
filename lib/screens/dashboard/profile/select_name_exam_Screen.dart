@@ -5,7 +5,15 @@ import '../../../services/api_service.dart';
 import '../judiciary_exam_constants.dart';
 
 class SelectExamScreen extends StatefulWidget {
-  const SelectExamScreen({super.key});
+  // 👇 Naye optional parameters
+  final String? initialName;
+  final String? initialExam;
+
+  const SelectExamScreen({
+    super.key,
+    this.initialName,
+    this.initialExam,
+  });
 
   @override
   State<SelectExamScreen> createState() => _SelectExamScreenState();
@@ -17,6 +25,19 @@ class _SelectExamScreenState extends State<SelectExamScreen> {
 
   String? selectedExam;
   bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 👇 Pre-fill name
+    if (widget.initialName != null && widget.initialName!.isNotEmpty) {
+      nameController.text = widget.initialName!;
+    }
+    // 👇 Pre-select exam
+    if (widget.initialExam != null && widget.initialExam!.isNotEmpty) {
+      selectedExam = widget.initialExam;
+    }
+  }
 
   @override
   void dispose() {

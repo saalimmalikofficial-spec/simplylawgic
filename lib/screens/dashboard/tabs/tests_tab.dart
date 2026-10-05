@@ -7,7 +7,8 @@ import 'package:simplylawgic/models/test_series.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
 
 class TestsTab extends StatefulWidget {
-  const TestsTab({super.key});
+  final bool showBackButton;
+  const TestsTab({super.key, this.showBackButton = true});
 
   @override
   State<TestsTab> createState() => _TestsTabState();
@@ -93,10 +94,14 @@ class _TestsTabState extends State<TestsTab> {
 
         bool matchesPopular = true;
         if (_selectedFilter == 'Popular') {
-          matchesPopular = test.tags.any((tag) => tag.toLowerCase() == 'popular');
+          matchesPopular =
+              test.tags.any((tag) => tag.toLowerCase() == 'popular');
         }
 
-        return matchesSearch && matchesCategory && matchesPrice && matchesPopular;
+        return matchesSearch &&
+            matchesCategory &&
+            matchesPrice &&
+            matchesPopular;
       }).toList();
     });
   }
@@ -116,44 +121,79 @@ class _TestsTabState extends State<TestsTab> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = isDark ? const Color(0xFF0A0A0F) : AppColors.bg;
     final cardColor = isDark ? const Color(0xFF1A1A2E) : AppColors.background;
-    final borderColor = isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    final borderColor =
+    isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
     final textColor = isDark ? Colors.white : AppColors.textDark;
-    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
-    final shadowColor = isDark ? Colors.white.withOpacity(0.03) : AppColors.cardShadow;
+    final secondaryTextColor =
+    isDark ? Colors.white70 : AppColors.textSecondary;
+    final shadowColor =
+    isDark ? Colors.white.withOpacity(0.03) : AppColors.cardShadow;
 
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: _loadTestSeries,
-      child: Container(
-        color: backgroundColor,
-        child: _isLoading
-            ? Center(
-          child: CircularProgressIndicator(
-            color: AppColors.primary,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isDark ? Colors.white : AppColors.primary,
-            ),
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      appBar: widget.showBackButton
+          ? AppBar(
+        backgroundColor:
+        isDark ? const Color(0xFF12121E) : Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded, color: textColor),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Test Series',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: textColor,
           ),
-        )
-            : _errorMessage != null
-            ? _buildErrorView(isDark)
-            : _testSeries.isEmpty
-            ? _buildEmptyView(isDark, secondaryTextColor)
-            : Column(
-          children: [
-            _buildHeaderSection(isDark, borderColor, cardColor, secondaryTextColor),
-            Expanded(
-              child: _filteredTests.isEmpty
-                  ? _buildNoResultsView(isDark, secondaryTextColor)
-                  : _buildTestList(isDark, cardColor, borderColor, shadowColor, textColor, secondaryTextColor),
+        ),
+        centerTitle: true,
+      )
+          : null,
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _loadTestSeries,
+        child: Container(
+          color: backgroundColor,
+          child: _isLoading
+              ? Center(
+            child: CircularProgressIndicator(
+              color: AppColors.primary,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isDark ? Colors.white : AppColors.primary,
+              ),
             ),
-          ],
+          )
+              : _errorMessage != null
+              ? _buildErrorView(isDark)
+              : _testSeries.isEmpty
+              ? _buildEmptyView(isDark, secondaryTextColor)
+              : Column(
+            children: [
+              _buildHeaderSection(isDark, borderColor, cardColor,
+                  secondaryTextColor),
+              Expanded(
+                child: _filteredTests.isEmpty
+                    ? _buildNoResultsView(
+                    isDark, secondaryTextColor)
+                    : _buildTestList(
+                    isDark,
+                    cardColor,
+                    borderColor,
+                    shadowColor,
+                    textColor,
+                    secondaryTextColor),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeaderSection(bool isDark, Color borderColor, Color cardColor, Color secondaryTextColor) {
+  Widget _buildHeaderSection(bool isDark, Color borderColor, Color cardColor,
+      Color secondaryTextColor) {
     return Container(
       decoration: BoxDecoration(
         color: cardColor,
@@ -169,11 +209,12 @@ class _TestsTabState extends State<TestsTab> {
     );
   }
 
-  Widget _buildSearchBar(bool isDark, Color borderColor, Color secondaryTextColor) {
+  Widget _buildSearchBar(
+      bool isDark, Color borderColor, Color secondaryTextColor) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Container(
-        height: 46,
+        height: 44,
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF0A0A0F) : AppColors.bg,
           borderRadius: BorderRadius.circular(10),
@@ -189,37 +230,49 @@ class _TestsTabState extends State<TestsTab> {
           decoration: InputDecoration(
             hintText: 'Search test series, subjects...',
             hintStyle: TextStyle(
-              color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+              color:
+              isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
               fontSize: 13,
             ),
             prefixIcon: Icon(
               Icons.search_rounded,
-              color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+              color:
+              isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
               size: 20,
             ),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
               icon: Icon(
                 Icons.cancel_rounded,
-                color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+                color: isDark
+                    ? Colors.white.withOpacity(0.3)
+                    : AppColors.textMuted,
                 size: 18,
               ),
               onPressed: _clearSearch,
             )
                 : null,
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(vertical: 10),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildFilterChips(bool isDark, Color borderColor, Color secondaryTextColor) {
-    final filters = ['All', 'Popular', 'Major Laws', 'Minor Laws', 'Free', 'Paid'];
+  Widget _buildFilterChips(
+      bool isDark, Color borderColor, Color secondaryTextColor) {
+    final filters = [
+      'All',
+      'Popular',
+      'Major Laws',
+      'Minor Laws',
+      'Free',
+      'Paid'
+    ];
 
     return SizedBox(
-      height: 38,
+      height: 36,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -237,7 +290,9 @@ class _TestsTabState extends State<TestsTab> {
                 setState(() => _selectedFilter = filter);
                 _filterTests();
               },
-              selectedColor: filter == 'Popular' ? Colors.amber.shade700 : AppColors.primary,
+              selectedColor: filter == 'Popular'
+                  ? Colors.amber.shade700
+                  : AppColors.primary,
               backgroundColor: isDark ? const Color(0xFF0A0A0F) : AppColors.bg,
               showCheckmark: false,
               labelStyle: TextStyle(
@@ -251,10 +306,13 @@ class _TestsTabState extends State<TestsTab> {
               ),
               side: BorderSide(
                 color: isSelected
-                    ? (filter == 'Popular' ? Colors.amber.shade700 : AppColors.primary)
+                    ? (filter == 'Popular'
+                    ? Colors.amber.shade700
+                    : AppColors.primary)
                     : borderColor,
               ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           );
         },
@@ -262,9 +320,10 @@ class _TestsTabState extends State<TestsTab> {
     );
   }
 
-  Widget _buildTestList(bool isDark, Color cardColor, Color borderColor, Color shadowColor, Color textColor, Color secondaryTextColor) {
+  Widget _buildTestList(bool isDark, Color cardColor, Color borderColor,
+      Color shadowColor, Color textColor, Color secondaryTextColor) {
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: _filteredTests.length,
       itemBuilder: (context, index) {
         final test = _filteredTests[index];
@@ -278,13 +337,19 @@ class _TestsTabState extends State<TestsTab> {
           textColor: textColor,
           secondaryTextColor: secondaryTextColor,
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => TestSeriesDetailScreen(slug: test.slug),
-              ),
+            Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute( builder: (context) => TestSeriesDetailScreen(slug: test.slug),),
             );
           },
+          //
+          // onTap: () {
+          //   Navigator.push(
+          //     context,
+          //     MaterialPageRoute(
+          //       builder: (context) => TestSeriesDetailScreen(slug: test.slug),
+          //     ),
+          //   );
+          // },
         );
       },
     );
@@ -301,7 +366,8 @@ class _TestsTabState extends State<TestsTab> {
               Icon(
                 Icons.search_off_rounded,
                 size: 64,
-                color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+                color:
+                isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
               ),
               const SizedBox(height: 12),
               Text(
@@ -326,7 +392,8 @@ class _TestsTabState extends State<TestsTab> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
                 child: const Text('Reset Search'),
               ),
@@ -345,7 +412,8 @@ class _TestsTabState extends State<TestsTab> {
           padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 20),
           child: Column(
             children: [
-              const Icon(Icons.error_outline_rounded, size: 56, color: AppColors.error),
+              const Icon(Icons.error_outline_rounded,
+                  size: 56, color: AppColors.error),
               const SizedBox(height: 12),
               Text(
                 _errorMessage ?? 'An error occurred',
@@ -364,7 +432,8 @@ class _TestsTabState extends State<TestsTab> {
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
                 ),
               ),
             ],
@@ -385,7 +454,8 @@ class _TestsTabState extends State<TestsTab> {
               Icon(
                 Icons.assignment_outlined,
                 size: 64,
-                color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+                color:
+                isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
               ),
               const SizedBox(height: 12),
               Text(
@@ -412,6 +482,9 @@ class _TestsTabState extends State<TestsTab> {
   }
 }
 
+// ============================================================
+// TEST CARD (same as before)
+// ============================================================
 class TestCard extends StatelessWidget {
   final TestSeries test;
   final bool isDark;
@@ -434,50 +507,77 @@ class TestCard extends StatelessWidget {
     required this.onTap,
   });
 
+  String _capitalizeTitle(String title) {
+    return title.split(' ').map((word) {
+      if (word.isEmpty) return word;
+      if (word.length >= 2 &&
+          word == word.toUpperCase() &&
+          RegExp(r'^[A-Z]+$').hasMatch(word)) {
+        return word;
+      }
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final isPopular = test.tags.any((tag) => tag.toLowerCase() == 'popular');
 
+    final effectiveCardColor = isDark ? const Color(0xFF12131C) : Colors.white;
+    final effectiveBorderColor =
+    isDark ? const Color(0xFF26293B) : const Color(0xFFEAECF0);
+    final placeholderBg =
+    isDark ? const Color(0xFF0D0E15) : const Color(0xFFF8F9FA);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-        boxShadow: [
+        color: effectiveCardColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: effectiveBorderColor, width: 1),
+        boxShadow: isDark
+            ? []
+            : [
           BoxShadow(
-            color: shadowColor,
-            blurRadius: 6,
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                child: Container(
-                  height: 110,
-                  width: double.infinity,
-                  color: AppColors.primary.withOpacity(0.08),
-                  child: test.coverImageUrl.isNotEmpty
-                      ? Image.network(
-                    test.coverImageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildPlaceholderHeader(),
-                  )
-                      : _buildPlaceholderHeader(),
+                borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(9)),
+                child: AspectRatio(
+                  aspectRatio: 2.8 / 1,
+                  child: Container(
+                    width: double.infinity,
+                    color: placeholderBg,
+                    child: test.coverImageUrl.isNotEmpty
+                        ? Image.network(
+                      test.coverImageUrl,
+                      fit: BoxFit.fill,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (_, __, ___) =>
+                          _buildPlaceholderHeader(placeholderBg),
+                    )
+                        : _buildPlaceholderHeader(placeholderBg),
+                  ),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(14),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -486,106 +586,147 @@ class TestCard extends StatelessWidget {
                         _Badge(
                           text: test.subjectCategory.toUpperCase(),
                           color: AppColors.primary,
-                          backgroundColor: AppColors.primary.withOpacity(0.08),
-                          isDark: isDark,
+                          backgroundColor: AppColors.primary.withOpacity(0.1),
                         ),
                         const Spacer(),
                         if (isPopular) ...[
                           _Badge(
-                            text: 'Popular',
-                            color: Colors.amber.shade800,
-                            backgroundColor: Colors.amber.shade50,
-                            icon: Icon(Icons.star_rounded, size: 12, color: Colors.amber.shade800),
-                            isDark: isDark,
+                            text: 'POPULAR',
+                            color: const Color(0xFFD97706),
+                            backgroundColor: const Color(0xFFFEF3C7),
+                            icon: const Icon(Icons.star_rounded,
+                                size: 10, color: Color(0xFFD97706)),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 4),
                         ],
                         _Badge(
-                          text: '${test.testCount} Tests',
+                          text: '${test.testCount} TESTS',
                           color: AppColors.secondary,
-                          backgroundColor: AppColors.secondary.withOpacity(0.08),
-                          icon: Icon(Icons.assignment_outlined, size: 12, color: AppColors.secondary),
-                          isDark: isDark,
+                          backgroundColor:
+                          AppColors.secondary.withOpacity(0.1),
+                          icon: Icon(Icons.assignment_outlined,
+                              size: 10, color: AppColors.secondary),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     Text(
-                      test.title,
+                      _capitalizeTitle(test.title),
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
                         color: textColor,
+                        height: 1.25,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      test.description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: secondaryTextColor,
-                        height: 1.4,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.menu_book_rounded,
+                          size: 11,
+                          color: isDark ? Colors.white38 : Colors.black38,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            test.subjectName,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: isDark ? Colors.white60 : Colors.black54,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
                     if (test.tags.isNotEmpty) ...[
+                      const SizedBox(height: 6),
                       Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: test.tags.where((t) => t.toLowerCase() != 'popular').map((tag) {
+                        spacing: 4,
+                        runSpacing: 2,
+                        children: test.tags
+                            .where((t) => t.toLowerCase() != 'popular')
+                            .map((tag) {
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1.5),
                             decoration: BoxDecoration(
-                              color: isDark ? const Color(0xFF0A0A0F) : AppColors.bg,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: borderColor),
+                              color: isDark
+                                  ? const Color(0xFF1A1C29)
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(3),
                             ),
                             child: Text(
                               '#$tag',
                               style: TextStyle(
-                                fontSize: 10,
-                                color: isDark ? Colors.white.withOpacity(0.3) : AppColors.textMuted,
+                                fontSize: 9.5,
+                                color: isDark ? Colors.white38 : Colors.black45,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 12),
                     ],
+                    const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          test.isPaid ? '₹${test.priceAmount} ${test.currency}' : 'FREE',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: test.isPaid ? AppColors.primary : AppColors.secondary,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              test.isPaid ? '₹${test.priceAmount}' : 'FREE',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w800,
+                                color: test.isPaid
+                                    ? AppColors.primary
+                                    : AppColors.secondary,
+                              ),
+                            ),
+                            if (test.isPaid && test.currency.isNotEmpty) ...[
+                              const SizedBox(width: 2),
+                              Text(
+                                test.currency,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color:
+                                  isDark ? Colors.white38 : Colors.black45,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ]
+                          ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: AppColors.primary,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 'View Details',
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                 ),
                               ),
-                              SizedBox(width: 4),
-                              Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.white),
+                              SizedBox(width: 3),
+                              Icon(Icons.arrow_forward_rounded,
+                                  size: 11, color: Colors.white),
                             ],
                           ),
                         ),
@@ -601,22 +742,28 @@ class TestCard extends StatelessWidget {
     );
   }
 
-  Widget _buildPlaceholderHeader() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.menu_book_rounded, size: 36, color: AppColors.primary.withOpacity(0.6)),
-          const SizedBox(height: 4),
-          Text(
-            test.subjectName,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primary.withOpacity(0.8),
+  Widget _buildPlaceholderHeader(Color bgColor) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: bgColor,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.menu_book_rounded,
+                size: 28, color: AppColors.primary.withOpacity(0.4)),
+            const SizedBox(height: 2),
+            Text(
+              test.subjectName,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary.withOpacity(0.6),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -627,33 +774,32 @@ class _Badge extends StatelessWidget {
   final String text;
   final Color color;
   final Color backgroundColor;
-  final bool isDark;
 
   const _Badge({
     required this.text,
     required this.color,
     required this.backgroundColor,
     this.icon,
-    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[icon!, const SizedBox(width: 3)],
+          if (icon != null) ...[icon!, const SizedBox(width: 2)],
           Text(
             text,
             style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+              fontSize: 8.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
               color: color,
             ),
           ),

@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local Android signing files
+android/key.properties*
+# Local DevTools config
+devtools_options.yaml

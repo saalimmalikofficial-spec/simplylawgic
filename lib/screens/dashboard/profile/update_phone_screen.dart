@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:simplylawgic/services/api_service.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
 
@@ -20,8 +21,47 @@ class _UpdatePhoneScreenState extends State<UpdatePhoneScreen> {
 
   final List<String> _countryCodes = ['+91', '+1', '+44', '+971', '+61'];
 
+  // ============ NATIVE SMS CHANNEL ============
+  static const MethodChannel _smsChannel =
+  MethodChannel('com.bettlebyte.simplylawgic/sms');
+
+  @override
+  void initState() {
+    super.initState();
+    _setupSmsChannel();
+  }
+
+  void _setupSmsChannel() {
+    _smsChannel.setMethodCallHandler((call) async {
+      debugPrint('==== UpdatePhone NATIVE CALL: ${call.method} ====');
+      if (call.method == 'onSmsReceived') {
+        final String message = call.arguments as String;
+        debugPrint('==== UpdatePhone SMS VIA NATIVE: $message ====');
+        _extractOTPFromSms(message);
+      }
+    });
+  }
+
+  void _extractOTPFromSms(String message) {
+    // 4 ya 6 digit OTP match karo
+    final regex = RegExp(r'\b\d{4,6}\b');
+    final matches = regex.allMatches(message);
+    if (matches.isNotEmpty) {
+      final otp = matches.last.group(0)!;
+      debugPrint('==== UpdatePhone EXTRACTED OTP: $otp ====');
+
+      if (mounted) {
+        _otpController.text = otp;
+        setState(() {});
+      }
+    } else {
+      debugPrint('==== UpdatePhone NO OTP FOUND ====');
+    }
+  }
+
   @override
   void dispose() {
+    _smsChannel.setMethodCallHandler(null); // Cleanup
     _phoneController.dispose();
     _otpController.dispose();
     super.dispose();
@@ -227,7 +267,7 @@ class _UpdatePhoneScreenState extends State<UpdatePhoneScreen> {
                   color: isDark ? Colors.white : AppColors.textPrimary,
                 ),
                 decoration: InputDecoration(
-                  hintText: '------',
+                  hintText: '----',
                   counterText: '',
                   filled: true,
                   fillColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,

@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:simplylawgic/models/attempt_statusResponse.dart';
+import 'package:simplylawgic/models/purchaseItem.dart';
 import 'package:simplylawgic/services/storage_service.dart';
 import '../models/student_model.dart';
+import '../models/study_video.dart' show StudyVideoDetail, StudyVideo;
 import '../models/subject_notes.dart';
 import '../models/test_series.dart';
 
@@ -44,6 +47,112 @@ class ApiService {
       rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
+    }
+  }
+  // ============ GOOGLE SIGN-IN ============
+
+  // Sign in / sign up with Google ID Token
+// ============ GOOGLE SIGN-IN ============
+
+  Future<SignInResponse> googleSignIn(String idToken) async {
+    final url = Uri.parse('$baseUrl/student/auth/google');
+
+    print('');
+    print('========================================');
+    print('API: GOOGLE SIGN-IN');
+    print('========================================');
+
+    print('API URL: $url');
+    print('API METHOD: POST');
+
+    print('API: Preparing request body...');
+
+    final requestBody = {
+      'idToken': idToken,
+    };
+
+    print('API BODY:');
+    print('{');
+    print('  idToken: [TOKEN RECEIVED]');
+    print('}');
+
+    try {
+      print('API: Sending Google ID Token to backend...');
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode(requestBody),
+      );
+
+      print('');
+      print('API: Response received');
+      print('API STATUS CODE: ${response.statusCode}');
+      print('API RESPONSE BODY: ${response.body}');
+
+      if (response.statusCode == 200 ||
+          response.statusCode == 201) {
+
+        print('API: Google login SUCCESS');
+
+        final Map<String, dynamic> data =
+        json.decode(response.body);
+
+        print('API: Response JSON parsed');
+
+        final signIn = SignInResponse.fromJson(data);
+
+        print('API: SignInResponse created');
+
+        print('API: Saving token...');
+        await _storage.saveToken(signIn.token);
+
+        print('API: Saving student...');
+        await _storage.saveStudent(signIn.student);
+
+        print('API: Saving profile completion...');
+        await _storage.saveProfileComplete(
+          signIn.profileComplete,
+        );
+
+        print('API: All login data saved');
+        print('API: GOOGLE LOGIN COMPLETED');
+
+        print('========================================');
+
+        return signIn;
+      } else {
+        print('API: Google login FAILED');
+
+        Map<String, dynamic> errorData = {};
+
+        try {
+          errorData = json.decode(response.body);
+        } catch (_) {
+          print('API: Response is not valid JSON');
+        }
+
+        final message =
+            errorData['message'] ??
+                'Google sign-in failed';
+
+        print('API ERROR MESSAGE: $message');
+
+        throw Exception(message);
+      }
+    } on Exception {
+      print('API: Exception occurred');
+      rethrow;
+    } catch (e) {
+      print('API: Network/Unknown error');
+      print('API ERROR: $e');
+
+      throw Exception(
+        'Network error: ${e.toString()}',
+      );
     }
   }
 
@@ -126,9 +235,13 @@ class ApiService {
     final url = Uri.parse('$baseUrl/subject-wise-notes/public');
 
     try {
+      final token = await _getToken();
       final response = await http.get(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
 
       if (response.statusCode == 200) {
@@ -149,9 +262,13 @@ class ApiService {
     final url = Uri.parse('$baseUrl/subject-wise-notes/public/$slug');
 
     try {
+      final token = await _getToken();
       final response = await http.get(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
 
       if (response.statusCode == 200) {
@@ -174,9 +291,13 @@ class ApiService {
     final url = Uri.parse('$baseUrl/test-series/public');
 
     try {
+      final token = await _getToken();
       final response = await http.get(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
 
       if (response.statusCode == 200) {
@@ -197,9 +318,13 @@ class ApiService {
     final url = Uri.parse('$baseUrl/test-series/public/$slug');
 
     try {
+      final token = await _getToken();
       final response = await http.get(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
 
       if (response.statusCode == 200) {
@@ -349,19 +474,41 @@ class ApiService {
     }
   }
 
-  // Submit test (final)
-  Future<Map<String, dynamic>> submitTest(String attemptId) async {
+// Submit test (final)
+  Future<Map<String, dynamic>> submitTest(
+      String attemptId, {
+        List<Map<String, dynamic>>? answers,
+      }) async {
     final url = Uri.parse('$baseUrl/test-series/attempts/$attemptId/submit');
 
     try {
       final token = await _getToken();
+
+      final Map<String, dynamic> body = {};
+      if (answers != null && answers.isNotEmpty) {
+        body['answers'] = answers;
+      }
+
+      print('');
+      print('========================================');
+      print('API: SUBMIT TEST');
+      print('========================================');
+      print('API URL: $url');
+      print('API BODY: $body');
+      print('========================================');
+
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
+        body: json.encode(body),
       );
+
+      print('API STATUS: ${response.statusCode}');
+      print('API RESPONSE: ${response.body}');
+      print('========================================');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return json.decode(response.body);
@@ -377,34 +524,6 @@ class ApiService {
   }
 
   // ============ ANALYTICS ============
-
-  // Student dashboard analytics
-  // Future<Map<String, dynamic>> getStudentAnalytics({int limit = 50}) async {
-  //   final url = Uri.parse('$baseUrl/student/dashboard/analytics?limit=$limit');
-  //
-  //   try {
-  //     final token = await _getToken();
-  //     final response = await http.get(
-  //       url,
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         'Authorization': 'Bearer $token',
-  //       },
-  //     );
-  //
-  //     if (response.statusCode == 200) {
-  //       return json.decode(response.body);
-  //     } else {
-  //       final errorData = json.decode(response.body);
-  //       throw Exception(errorData['message'] ?? 'Failed to fetch analytics');
-  //     }
-  //   } on Exception {
-  //     rethrow;
-  //   } catch (e) {
-  //     throw Exception('Network error: ${e.toString()}');
-  //   }
-  // }
-
 
   // Student dashboard analytics
   Future<Map<String, dynamic>> getStudentAnalytics({int limit = 50}) async {
@@ -478,7 +597,8 @@ class ApiService {
 
   // Verify OTP and update phone
   Future<Map<String, dynamic>> changePhoneVerify(
-      String phone, String otp) async {
+      String phone, String otp) async
+  {
     final url = Uri.parse('$baseUrl/student/auth/change-phone/verify');
 
     try {
@@ -767,6 +887,347 @@ class ApiService {
       rethrow;
     } catch (e) {
       throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // ============ CHECKOUT SESSION (PAID CONTENT) ============
+
+  Future<Map<String, dynamic>> createCheckoutSession({
+    required String type,
+    required String slug,
+    String? referralCode,
+    String returnUrl = 'simplylawgic://purchase',
+  }) async {
+    final url = Uri.parse('$baseUrl/student/app/checkout-session');
+
+    try {
+      final token = await _getToken();
+
+      final Map<String, dynamic> body = {
+        'type': type,
+        'slug': slug,
+        'returnUrl': returnUrl,
+        'referralCode': (referralCode ?? '').trim(),
+      };
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(body),
+      );
+
+      print('');
+      print('========================================');
+      print('API: CHECKOUT SESSION');
+      print('========================================');
+      print('API URL: $url');
+      print('API BODY: $body');
+      print('API STATUS: ${response.statusCode}');
+      print('API RESPONSE: ${response.body}');
+      print('========================================');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      } else {
+        final Map<String, dynamic> errorData = json.decode(response.body);
+        throw Exception(
+          errorData['message'] ?? 'Failed to create checkout session',
+        );
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // ============ CHECKOUT SESSION — SUBJECT NOTES ============
+  Future<Map<String, dynamic>> createNotesCheckoutSession({
+    required String noteId,
+    required String blockId,
+    String? referralCode,
+    String returnUrl = 'simplylawgic://purchase',
+  }) async {
+    final url = Uri.parse('$baseUrl/student/app/checkout-session');
+
+    try {
+      final token = await _getToken();
+
+      final Map<String, dynamic> body = {
+        'type': 'notes-subject',
+        'noteId': noteId,
+        'blockId': blockId,
+        'returnUrl': returnUrl,
+        'referralCode': (referralCode ?? '').trim(),
+      };
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(body),
+      );
+
+      print('');
+      print('========================================');
+      print('API: NOTES CHECKOUT SESSION');
+      print('========================================');
+      print('API URL: $url');
+      print('API BODY: $body');
+      print('API STATUS: ${response.statusCode}');
+      print('API RESPONSE: ${response.body}');
+      print('========================================');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      } else {
+        final Map<String, dynamic> errorData = json.decode(response.body);
+        throw Exception(
+          errorData['message'] ?? 'Failed to create checkout session',
+        );
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Your Purchases
+  // ─────────────────────────────────────────────────────────────
+  Future<PurchasesResponse> getMyPurchases() async {
+    final url = Uri.parse('$baseUrl/student/account/purchases');
+    final token = await _storage.getToken();
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return PurchasesResponse.fromJson(data);
+      } else {
+        final Map<String, dynamic> errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to load purchases');
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // ============ DELETE ACCOUNT ============
+  Future<String> deleteAccount(String reason) async {
+    final url = Uri.parse('$baseUrl/student/account/delete');
+    final token = await _storage.getToken();
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'reason': reason}),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return data['message'] ??
+            'Your profile has been deleted successfully.';
+      } else {
+        final Map<String, dynamic> errorData = json.decode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to delete account');
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  Future<AttemptStatusResponse> getAttemptStatus({
+    required String slug,
+    required String testId,
+    String? resumeToken,
+  }) async {
+    final queryParams = <String, String>{
+      'slug': slug,
+      'testId': testId,
+    };
+
+    if (resumeToken != null && resumeToken.isNotEmpty) {
+      queryParams['resumeToken'] = resumeToken;
+    }
+
+    final uri = Uri.parse('$baseUrl/test-series/attempts/status')
+        .replace(queryParameters: queryParams);
+
+    try {
+      final token = await _storage.getToken();
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return AttemptStatusResponse.fromJson(data);
+      } else {
+        // Try to parse server error message
+        String message = 'Failed to fetch attempt status';
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData is Map && errorData['message'] != null) {
+            message = errorData['message'].toString();
+          }
+        } catch (_) {}
+        throw Exception(message);
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  // ============================================================
+  // ✅ GET ATTEMPT REPORT
+  // GET /api/test-series/attempts/{{attemptId}}/report
+  // ============================================================
+  Future<Map<String, dynamic>> getAttemptReport(String attemptId) async {
+    final url = Uri.parse('$baseUrl/test-series/attempts/$attemptId/report');
+
+    try {
+      final token = await _storage.getToken();
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        String message = 'Failed to fetch report';
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData is Map && errorData['message'] != null) {
+            message = errorData['message'].toString();
+          }
+        } catch (_) {}
+        throw Exception(message);
+      }
+    } on Exception {
+      rethrow;
+    } catch (e) {
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+  // ======================================================
+// GET ALL PUBLIC STUDY VIDEOS
+// ======================================================
+
+  Future<List<StudyVideo>> getStudyVideos() async {
+    final url = Uri.parse('$baseUrl/study-videos/public');
+
+    try {
+      final token = await _getToken();
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = json.decode(response.body);
+
+        if (decoded is! List) {
+          throw Exception('Invalid study videos response');
+        }
+
+        return decoded
+            .map(
+              (item) => StudyVideo.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+            .toList();
+      }
+
+      throw Exception(
+        'Failed to load study videos (${response.statusCode})',
+      );
+    } catch (e) {
+      throw Exception(
+        'Unable to load study videos: ${e.toString()}',
+      );
+    }
+  }
+
+
+// ======================================================
+// GET SINGLE STUDY VIDEO BY SLUG
+// ======================================================
+
+  Future<StudyVideoDetail> getStudyVideoBySlug(String slug) async {
+    final encodedSlug = Uri.encodeComponent(slug);
+
+    final url = Uri.parse(
+      '$baseUrl/study-videos/public/$encodedSlug',
+    );
+
+    try {
+      final token = await _getToken();
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data =
+        Map<String, dynamic>.from(
+          json.decode(response.body),
+        );
+
+        return StudyVideoDetail.fromJson(data);
+      }
+
+      throw Exception(
+        'Failed to load video details (${response.statusCode})',
+      );
+    } catch (e) {
+      throw Exception(
+        'Unable to load video details: ${e.toString()}',
+      );
     }
   }
 

@@ -1,14 +1,15 @@
 // lib/screens/user_progress_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:simplylawgic/screens/attempt_report_screen.dart';
 import '../models/analytics_model.dart';
 import '../models/student_model.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../services/route_observer.dart';
-import '../services/student_notifier.dart';   // 🔥 NEW
+import '../services/student_notifier.dart';
+import 'notes/all_subject_notes_screen.dart';
 
-/// Centralized colors
 class _AppColors {
   static const primary = Color(0xFF2563EB);
   static const primaryDark = Color(0xFF1D4ED8);
@@ -25,13 +26,19 @@ class _AppColors {
 }
 
 class UserProgressScreen extends StatefulWidget {
-  const UserProgressScreen({super.key});
+  // ✅ NEW: Back button control — bottom nav tab mein false hoga
+  final bool showBackButton;
+
+  const UserProgressScreen({
+    super.key,
+    this.showBackButton = true,
+  });
 
   @override
-  State<UserProgressScreen> createState() => _UserProgressScreenState();
+  State<UserProgressScreen> createState() => UserProgressScreenState();
 }
 
-class _UserProgressScreenState extends State<UserProgressScreen>
+class UserProgressScreenState extends State<UserProgressScreen>
     with SingleTickerProviderStateMixin, RouteAware {
   final ApiService _apiService = ApiService();
   final StorageService _storage = StorageService();
@@ -40,6 +47,8 @@ class _UserProgressScreenState extends State<UserProgressScreen>
   Student? _student;
   bool _isLoading = true;
   String? _errorMessage;
+
+  DateTime? _lastRefreshTime;
 
   late final AnimationController _entranceController;
   late final Animation<double> _fadeIn;
@@ -56,13 +65,20 @@ class _UserProgressScreenState extends State<UserProgressScreen>
       curve: Curves.easeOutCubic,
     );
 
-    // 🔥🔥🔥 GLOBAL NOTIFIER LISTENER
     StudentNotifier.instance.student.addListener(_onStudentChanged);
-
     _fetchAnalytics();
   }
 
-  // 🔥 Notifier change hone pe student update
+  Future<void> refreshData() async {
+    final now = DateTime.now();
+    if (_lastRefreshTime != null &&
+        now.difference(_lastRefreshTime!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastRefreshTime = now;
+    await _fetchAnalytics();
+  }
+
   void _onStudentChanged() {
     if (!mounted) return;
     final updated = StudentNotifier.instance.student.value;
@@ -82,9 +98,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
 
   @override
   void dispose() {
-    // 🔥 Listener remove
     StudentNotifier.instance.student.removeListener(_onStudentChanged);
-
     routeObserver.unsubscribe(this);
     _entranceController.dispose();
     super.dispose();
@@ -108,10 +122,9 @@ class _UserProgressScreenState extends State<UserProgressScreen>
     }
   }
 
-  // ============================================================
-  // 🔥 FETCH — local + API + notifier
-  // ============================================================
   Future<void> _fetchAnalytics() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -179,9 +192,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                   : RefreshIndicator(
                 key: const ValueKey('content'),
                 onRefresh: _fetchAnalytics,
-                color: isDark
-                    ? Colors.white
-                    : _AppColors.primary,
+                color: isDark ? Colors.white : _AppColors.primary,
                 backgroundColor: isDark
                     ? const Color(0xFF1A1A2E)
                     : Colors.white,
@@ -218,9 +229,6 @@ class _UserProgressScreenState extends State<UserProgressScreen>
     );
   }
 
-  // ============================================================
-  // MAIN CONTENT
-  // ============================================================
   Widget _buildContent(bool isDark) {
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -230,19 +238,14 @@ class _UserProgressScreenState extends State<UserProgressScreen>
         children: [
           _buildTopBar(isDark),
           const SizedBox(height: 22),
-
           _buildProfileCard(isDark),
           const SizedBox(height: 22),
-
           _buildStatsRow(isDark),
           const SizedBox(height: 20),
-
           _buildQuickActions(isDark),
           const SizedBox(height: 20),
-
           _buildStreakBanner(isDark),
           const SizedBox(height: 26),
-
           Align(
             alignment: Alignment.centerLeft,
             child: _buildQuestionBreakdown(isDark),
@@ -287,7 +290,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
   }
 
   // ============================================================
-  // TOP BAR
+  // ✅ TOP BAR — back button OR menu icon (flag ke hisaab se)
   // ============================================================
   Widget _buildTopBar(bool isDark) {
     final cardColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
@@ -295,48 +298,70 @@ class _UserProgressScreenState extends State<UserProgressScreen>
 
     return Row(
       children: [
-        _circleIconButton(
-          icon: Icons.menu_rounded,
-          bg: cardColor,
-          iconColor: iconColor,
-          onTap: () {
-            final scaffold = Scaffold.maybeOf(context);
-            if (scaffold != null && scaffold.hasDrawer) {
-              scaffold.openDrawer();
-            }
-          },
-        ),
+        // ✅ showBackButton == true → back icon (pop)
+        // ✅ showBackButton == false → menu icon (drawer open)
+        if (widget.showBackButton)
+          _circleIconButton(
+            icon: Icons.arrow_back_rounded,
+            bg: cardColor,
+            iconColor: iconColor,
+            onTap: () => Navigator.pop(context),
+          )
+        else
+          _circleIconButton(
+            icon: Icons.menu_rounded,
+            bg: cardColor,
+            iconColor: iconColor,
+            onTap: () {
+              final scaffold = Scaffold.maybeOf(context);
+              if (scaffold != null && scaffold.hasDrawer) {
+                scaffold.openDrawer();
+              }
+            },
+          ),
         const Spacer(),
         _circleIconButton(
           icon: Icons.search_rounded,
           bg: cardColor,
           iconColor: iconColor,
-          onTap: () {},
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+              const AllSubjectNotesScreen(title: 'Subject-Wise Notes'),
+            ),
+          ),
         ),
         const SizedBox(width: 10),
         Container(
           height: 44,
           width: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFF0F172A),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(13),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withOpacity(0.12)
+                  : const Color(0xFFE2E8F0),
+              width: 1,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.18),
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(7),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(6),
             child: Image.asset(
               'assets/images/logo.png',
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
+              errorBuilder: (_, __, ___) => Icon(
                 Icons.school_rounded,
-                color: Colors.white,
+                color: isDark ? const Color(0xFF0F172A) : _AppColors.primary,
                 size: 20,
               ),
             ),
@@ -365,6 +390,10 @@ class _UserProgressScreenState extends State<UserProgressScreen>
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: iconColor.withOpacity(0.08),
+              width: 1,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -376,7 +405,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              Center(child: Icon(icon, color: iconColor, size: 22)),
+              Center(child: Icon(icon, color: iconColor, size: 21)),
               if (showDot)
                 Positioned(
                   top: 9,
@@ -411,68 +440,42 @@ class _UserProgressScreenState extends State<UserProgressScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Center(
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 104,
-                height: 104,
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark
-                          ? Colors.black.withOpacity(0.3)
-                          : const Color(0xFF2563EB).withOpacity(0.14),
-                      blurRadius: 22,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
+          child: Container(
+            width: 104,
+            height: 104,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withOpacity(0.3)
+                      : const Color(0xFF2563EB).withOpacity(0.14),
+                  blurRadius: 22,
+                  offset: const Offset(0, 10),
                 ),
-                child: ClipOval(
-                  child: (avatarUrl != null && avatarUrl.isNotEmpty)
-                      ? Image.network(
-                    avatarUrl,
-                    width: 96,
-                    height: 96,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return _buildInitialAvatar(name, isDark);
-                    },
-                    errorBuilder: (_, __, ___) =>
-                        _buildInitialAvatar(name, isDark),
-                  )
-                      : _buildInitialAvatar(name, isDark),
-                ),
-              ),
-              Positioned(
-                bottom: 2,
-                right: 2,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: _AppColors.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isDark ? const Color(0xFF07070C) : Colors.white,
-                      width: 2.5,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.edit_rounded,
-                    color: Colors.white,
-                    size: 12,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
+            child: ClipOval(
+              child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                  ? Image.network(
+                avatarUrl,
+                width: 96,
+                height: 96,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return _buildInitialAvatar(name, isDark);
+                },
+                errorBuilder: (_, __, ___) =>
+                    _buildInitialAvatar(name, isDark),
+              )
+                  : _buildInitialAvatar(name, isDark),
+            ),
           ),
         ),
         const SizedBox(height: 14),
-
         Text(
           name,
           textAlign: TextAlign.center,
@@ -486,7 +489,6 @@ class _UserProgressScreenState extends State<UserProgressScreen>
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 2),
-
         Text(
           examLabel,
           textAlign: TextAlign.center,
@@ -499,7 +501,6 @@ class _UserProgressScreenState extends State<UserProgressScreen>
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 10),
-
         Center(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -621,8 +622,8 @@ class _UserProgressScreenState extends State<UserProgressScreen>
           if (i.isOdd) {
             return SizedBox(
               height: 44,
-              child:
-              VerticalDivider(width: 1, thickness: 1, color: dividerColor),
+              child: VerticalDivider(
+                  width: 1, thickness: 1, color: dividerColor),
             );
           }
           final data = stats[i ~/ 2];
@@ -638,13 +639,13 @@ class _UserProgressScreenState extends State<UserProgressScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 30,
-          height: 30,
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
             color: data.color.withOpacity(isDark ? 0.2 : 0.12),
             shape: BoxShape.circle,
           ),
-          child: Icon(data.icon, color: data.color, size: 15),
+          child: Icon(data.icon, color: data.color, size: 16),
         ),
         const SizedBox(height: 8),
         TweenAnimationBuilder<int>(
@@ -662,7 +663,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
             ),
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 3),
         Text(
           data.label,
           textAlign: TextAlign.center,
@@ -746,19 +747,26 @@ class _UserProgressScreenState extends State<UserProgressScreen>
           HapticFeedback.selectionClick();
         },
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(11, 13, 11, 10),
+          padding: const EdgeInsets.fromLTRB(11, 14, 11, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 34,
+                height: 34,
                 decoration: BoxDecoration(
                   color: data.color,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: data.color.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: Icon(data.icon, color: Colors.white, size: 16),
+                child: Icon(data.icon, color: Colors.white, size: 17),
               ),
               const SizedBox(height: 12),
               Text(
@@ -784,12 +792,6 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                   color: subtitleColor,
                 ),
               ),
-              const SizedBox(height: 8),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 16,
-                color: data.color,
-              ),
             ],
           ),
         ),
@@ -805,9 +807,13 @@ class _UserProgressScreenState extends State<UserProgressScreen>
     final moduleName = 'Criminal Law Module';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1B33),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F1B33), Color(0xFF1A2B4A)],
+        ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -820,20 +826,20 @@ class _UserProgressScreenState extends State<UserProgressScreen>
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.1),
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white24),
             ),
             child: const Icon(
-              Icons.adjust_rounded,
+              Icons.local_fire_department_rounded,
               color: Color(0xFFFBBF24),
-              size: 20,
+              size: 22,
             ),
           ),
-          const SizedBox(width: 11),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -846,7 +852,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   'You\'re $testsLeft tests away from completing $moduleName',
                   style: const TextStyle(
@@ -867,9 +873,9 @@ class _UserProgressScreenState extends State<UserProgressScreen>
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
-              children: const [
+              children: [
                 Text(
                   'Continue',
                   style: TextStyle(
@@ -907,7 +913,6 @@ class _UserProgressScreenState extends State<UserProgressScreen>
     final total = breakdown.total;
     final double correctRatio = total > 0 ? breakdown.correct / total : 0;
     final double wrongRatio = total > 0 ? breakdown.wrong / total : 0;
-    final double skippedRatio = total > 0 ? breakdown.skipped / total : 0;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -924,15 +929,17 @@ class _UserProgressScreenState extends State<UserProgressScreen>
               height: 12,
               child: total == 0
                   ? Container(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.06)
-                      : const Color(0xFFF1F5F9))
+                color: isDark
+                    ? Colors.white.withOpacity(0.06)
+                    : const Color(0xFFF1F5F9),
+              )
                   : LayoutBuilder(
                 builder: (context, constraints) {
                   final w = constraints.maxWidth;
                   final correctW = w * correctRatio;
                   final wrongW = w * wrongRatio;
-                  final skippedW = (w - correctW - wrongW).clamp(0.0, w);
+                  final skippedW =
+                  (w - correctW - wrongW).clamp(0.0, w);
                   return Row(
                     children: [
                       Container(
@@ -1108,7 +1115,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                       : Icons.lightbulb_outline_rounded,
                   color: isWarning
                       ? (isDark
-                      ? const Color(0xFFF59E0B)
+                      ? const Color(0xFFFBBF24)
                       : const Color(0xFFD97706))
                       : (isDark
                       ? const Color(0xFF60A5FA)
@@ -1127,7 +1134,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                           fontWeight: FontWeight.bold,
                           color: isWarning
                               ? (isDark
-                              ? const Color(0xFFF59E0B)
+                              ? const Color(0xFFFBBF24)
                               : const Color(0xFF92400E))
                               : (isDark
                               ? const Color(0xFF60A5FA)
@@ -1139,9 +1146,10 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                         insight.message,
                         style: TextStyle(
                           fontSize: 12,
-                          height: 1.35,
-                          color:
-                          isDark ? Colors.white70 : Colors.grey.shade700,
+                          height: 1.4,
+                          color: isDark
+                              ? Colors.white70
+                              : const Color(0xFF334155),
                         ),
                       ),
                     ],
@@ -1281,8 +1289,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                     Text(
                         'First: ${retake.firstPercentage.toStringAsFixed(0)}%',
                         style: TextStyle(
-                            fontSize: 11,
-                            color: secondaryTextColor)),
+                            fontSize: 11, color: secondaryTextColor)),
                     Icon(Icons.arrow_right_alt_rounded,
                         size: 16,
                         color: isDark
@@ -1293,8 +1300,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color:
-                        isDark ? Colors.white : _AppColors.primary,
+                        color: isDark ? Colors.white : _AppColors.primary,
                       ),
                     ),
                     const Spacer(),
@@ -1356,77 +1362,111 @@ class _UserProgressScreenState extends State<UserProgressScreen>
         children: [
           _sectionTitle('Recent Attempts', textColor),
           const SizedBox(height: 14),
-          ...attempts.map((attempt) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(11),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF101020)
-                  : const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 19,
-                  backgroundColor: attempt.percentage >= 50
-                      ? (isDark
-                      ? const Color(0xFF1A3A1A)
-                      : const Color(0xFFDCFCE7))
-                      : (isDark
-                      ? const Color(0xFF3A1A1A)
-                      : const Color(0xFFFEE2E2)),
-                  child: Text(
-                    '${attempt.percentage.toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: attempt.percentage >= 50
-                          ? (isDark
-                          ? const Color(0xFF4CAF50)
-                          : const Color(0xFF15803D))
-                          : (isDark
-                          ? const Color(0xFFEF5350)
-                          : const Color(0xFFB91C1C)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        attempt.test.title,
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: textColor),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+          ...attempts.map((attempt) {
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AttemptReportScreen(
+                        attemptId: attempt.attemptId,
+                        testTitle: attempt.test.title,
+                        seriesTitle: attempt.series.title,
                       ),
-                      Text(
-                        attempt.series.title,
-                        style: TextStyle(
-                            fontSize: 11, color: secondaryTextColor),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF101020)
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 19,
+                        backgroundColor: attempt.percentage >= 50
+                            ? (isDark
+                            ? const Color(0xFF1A3A1A)
+                            : const Color(0xFFDCFCE7))
+                            : (isDark
+                            ? const Color(0xFF3A1A1A)
+                            : const Color(0xFFFEE2E2)),
+                        child: Text(
+                          '${attempt.percentage.toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: attempt.percentage >= 50
+                                ? (isDark
+                                ? const Color(0xFF4CAF50)
+                                : const Color(0xFF15803D))
+                                : (isDark
+                                ? const Color(0xFFEF5350)
+                                : const Color(0xFFB91C1C)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              attempt.test.title,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: textColor),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              attempt.series.title,
+                              style: TextStyle(
+                                  fontSize: 11, color: secondaryTextColor),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _formatDate(attempt.submittedAt),
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: isDark
+                                    ? Colors.white38
+                                    : const Color(0xFF94A3B8)),
+                          ),
+                          const SizedBox(height: 4),
+                          Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 11,
+                            color: isDark
+                                ? Colors.white38
+                                : const Color(0xFF94A3B8),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  _formatDate(attempt.submittedAt),
-                  style: TextStyle(
-                      fontSize: 10,
-                      color: isDark
-                          ? Colors.white38
-                          : const Color(0xFF94A3B8)),
-                ),
-              ],
-            ),
-          )),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -1488,8 +1528,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
                       ),
                       Text('${item.attemptsCount} Attempts',
                           style: TextStyle(
-                              fontSize: 11,
-                              color: secondaryTextColor)),
+                              fontSize: 11, color: secondaryTextColor)),
                     ],
                   ),
                 ),
@@ -1600,8 +1639,8 @@ class _UserProgressScreenState extends State<UserProgressScreen>
             Text(
               _errorMessage ?? 'An unexpected error occurred.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 13.5, color: errorTextColor, height: 1.4),
+              style:
+              TextStyle(fontSize: 13.5, color: errorTextColor, height: 1.4),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -1609,8 +1648,7 @@ class _UserProgressScreenState extends State<UserProgressScreen>
               icon: const Icon(Icons.refresh_rounded, size: 18),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
-                backgroundColor:
-                isDark ? Colors.white : _AppColors.primary,
+                backgroundColor: isDark ? Colors.white : _AppColors.primary,
                 foregroundColor:
                 isDark ? const Color(0xFF0A0A0F) : Colors.white,
                 padding:

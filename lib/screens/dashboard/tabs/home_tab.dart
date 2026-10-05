@@ -1,11 +1,17 @@
 // lib/screens/dashboard/tabs/home_tab.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:simplylawgic/screens/live/live_classes_screen.dart';
 
 import 'package:simplylawgic/services/api_service.dart';
+import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/models/subject_notes.dart';
+import 'package:simplylawgic/models/student_model.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
+import 'package:simplylawgic/screens/purchase/your_purchase_screen.dart';
+import 'package:simplylawgic/screens/auth/sign_up_step1_screen.dart'; // 👈 apna exact path daal
 
+import 'tests_tab.dart';
 import '../../notes/note_detail_screen.dart';
 import '../../notes/all_subject_notes_screen.dart';
 import '../../user_progress_screen.dart';
@@ -27,6 +33,9 @@ class _HomeTabState extends State<HomeTab> {
   String? _errorMessage;
 
   final ApiService _apiService = ApiService();
+  final StorageService _storage = StorageService();
+
+  bool _profileSheetShown = false; // 👈 taaki baar baar na khule
 
   final PageController _bannerController = PageController();
   int _currentBannerIndex = 0;
@@ -46,6 +55,7 @@ class _HomeTabState extends State<HomeTab> {
     super.initState();
     _loadAllNotes();
     _startBannerAutoSlide();
+    _checkProfileCompletion(); // 👈 ADD
   }
 
   @override
@@ -78,6 +88,172 @@ class _HomeTabState extends State<HomeTab> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // ============================================================
+  // 👇 Profile Completion Check
+  // ============================================================
+  Future<void> _checkProfileCompletion() async {
+    if (_profileSheetShown) return;
+
+    try {
+      // Pehle API se latest data try karo
+      Student? student;
+      try {
+        final data = await _apiService.getStudentAnalytics(limit: 1);
+        final profileJson = data['profile'];
+        if (profileJson != null && profileJson is Map<String, dynamic>) {
+          student = Student.fromJson(profileJson);
+          await _storage.saveStudent(student);
+        }
+      } catch (_) {
+        // API fail ho toh local storage se lo
+      }
+
+      student ??= await _storage.getStudent();
+      if (!mounted) return;
+
+      final phone = student?.phone;
+      final isPhoneMissing = phone == null || phone.trim().isEmpty;
+
+      if (isPhoneMissing) {
+        _profileSheetShown = true;
+        // UI settle hone ka thoda time do
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (!mounted) return;
+        _showCompleteProfileSheet();
+      }
+    } catch (e) {
+      debugPrint('Profile check error: $e');
+    }
+  }
+
+  void _showCompleteProfileSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      isDismissible: true,
+      enableDrag: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF161622) : Colors.white,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(28),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 22),
+
+              // Icon
+              Container(
+                height: 72,
+                width: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.18),
+                      AppColors.primary.withValues(alpha: 0.06),
+                    ],
+                  ),
+                ),
+                child: const Icon(
+                  Icons.person_add_alt_1_rounded,
+                  size: 34,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Title
+              Text(
+                'Complete Your Profile',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Subtitle
+              Text(
+                'Add your phone number to unlock all features, personalized updates, and a smoother experience.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.45,
+                  color: isDark ? Colors.white70 : AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 22),
+
+              // Button
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetContext); // close sheet
+                    Navigator.of(context, rootNavigator: true).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SignUpStep1Screen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                  label: const Text(
+                    'Complete Your Profile',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // "Maybe Later"
+              TextButton(
+                onPressed: () => Navigator.pop(sheetContext),
+                child: Text(
+                  'Maybe Later',
+                  style: TextStyle(
+                    color: isDark ? Colors.white60 : AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // ---------- Banner ----------
@@ -129,7 +305,8 @@ class _HomeTabState extends State<HomeTab> {
               children: [
                 _buildBannerSlider(isDark),
                 const SizedBox(height: 16),
-
+                _buildQuickOptionsGrid(isDark),
+                const SizedBox(height: 20),
                 _buildNotesSection(
                   title: 'Subject-Wise Notes',
                   notes: _subjectNotes,
@@ -139,9 +316,7 @@ class _HomeTabState extends State<HomeTab> {
                   textColor: textColor,
                   secondaryTextColor: secondaryTextColor,
                 ),
-
                 const SizedBox(height: 20),
-
                 _buildNotesSection(
                   title: 'Exam-Wise Notes',
                   notes: _examNotes,
@@ -160,7 +335,6 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   // ---------- AppBar ----------
-  // ✅ Menu icon (left)  +  Logo (right)
   PreferredSizeWidget _buildAppBar(bool isDark) {
     final backgroundColor = isDark ? const Color(0xFF0A0A0F) : AppColors.bg;
 
@@ -169,11 +343,8 @@ class _HomeTabState extends State<HomeTab> {
       elevation: 0,
       scrolledUnderElevation: 0,
       automaticallyImplyLeading: false,
-      centerTitle: false,
-      titleSpacing: 0,
+      centerTitle: true,
       leadingWidth: 60,
-
-      // 🔹 LEFT — Menu icon
       leading: Padding(
         padding: const EdgeInsets.only(left: 12),
         child: Center(
@@ -185,15 +356,59 @@ class _HomeTabState extends State<HomeTab> {
           ),
         ),
       ),
-
-      // 🔹 Title khaali — kuch nahi dikhana
-      title: const SizedBox.shrink(),
-
-      // 🔹 RIGHT — App logo
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildLogo(),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  ),
+                  children: const [
+                    TextSpan(text: 'Simply'),
+                    TextSpan(text: 'Lawgic'),
+                  ],
+                ),
+              ),
+              Text(
+                'Your Legal Companion',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.white60 : Colors.grey.shade600,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
       actions: [
         Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: Center(child: _buildLogo()),
+          padding: const EdgeInsets.only(right: 12),
+          child: Center(
+            child: _RoundedIconBox(
+              icon: Icons.search_rounded,
+              isDark: isDark,
+              semanticLabel: 'Search',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                  const AllSubjectNotesScreen(title: 'Subject-Wise Notes'),
+                ),
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -201,33 +416,119 @@ class _HomeTabState extends State<HomeTab> {
 
   Widget _buildLogo() {
     return Container(
-      height: 40,
-      width: 40,
+      height: 36,
+      width: 36,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
+            blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
         border: Border.all(color: Colors.grey.shade200),
       ),
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(3),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         child: Image.asset(
           'assets/images/logo.png',
           fit: BoxFit.contain,
           errorBuilder: (_, __, ___) => const Icon(
             Icons.gavel_rounded,
             color: AppColors.primary,
-            size: 20,
+            size: 18,
           ),
         ),
       ),
+    );
+  }
+
+  // ---------- Coming Soon ----------
+  void _showComingSoon(String feature) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            '$feature — Coming soon! 🚀',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+  }
+
+  // ---------- Quick Options Grid ----------
+  Widget _buildQuickOptionsGrid(bool isDark) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 14,
+      mainAxisSpacing: 14,
+      childAspectRatio: 1.3,
+      children: [
+        _QuickOptionCard(
+          index: 0,
+          title: 'Courses',
+          subtitle: 'Learn from experts',
+          icon: Icons.menu_book_rounded,
+          iconColor: const Color(0xFF2E7D32),
+          isDark: isDark,
+          onTap: () {
+            Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute(builder: (_) => const LiveClassesScreen()),
+            );
+          },
+        ),
+        _QuickOptionCard(
+          index: 1,
+          title: 'Test Series',
+          subtitle: 'Practice & Improve',
+          icon: Icons.assignment_rounded,
+          iconColor: const Color(0xFF1565C0),
+          isDark: isDark,
+          onTap: () {
+            Navigator.of(
+              context,
+              rootNavigator: true,
+            ).push(MaterialPageRoute(builder: (_) => const TestsTab()));
+          },
+        ),
+        _QuickOptionCard(
+          index: 2,
+          title: 'Study Material',
+          subtitle: 'Notes & Resources',
+          icon: Icons.article_rounded,
+          iconColor: const Color(0xFFE65100),
+          isDark: isDark,
+          onTap: () {
+            Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute(builder: (_) => const YourPurchaseScreen()),
+            );
+          },
+        ),
+        _QuickOptionCard(
+          index: 3,
+          title: 'My Progress',
+          subtitle: 'Track Your Journey',
+          icon: Icons.bar_chart_rounded,
+          iconColor: const Color(0xFF7B1FA2),
+          isDark: isDark,
+          onTap: () {
+            Navigator.of(context, rootNavigator: true).push(
+              MaterialPageRoute(builder: (_) => const UserProgressScreen()),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -431,14 +732,249 @@ class _HomeTabState extends State<HomeTab> {
       ),
     );
   }
+}
 
-  // ---------- Utils ----------
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
+// =============================================================
+// Quick Option Card
+// =============================================================
+class _QuickOptionCard extends StatefulWidget {
+  final int index;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color iconColor;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _QuickOptionCard({
+    required this.index,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.iconColor,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  State<_QuickOptionCard> createState() => _QuickOptionCardState();
+}
+
+class _QuickOptionCardState extends State<_QuickOptionCard>
+    with TickerProviderStateMixin {
+  late final AnimationController _enter;
+  late final AnimationController _bounce;
+  late final Animation<double> _bounceY;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _enter = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+    final curved = CurvedAnimation(parent: _enter, curve: Curves.easeOutCubic);
+    _fade = curved;
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.25),
+      end: Offset.zero,
+    ).animate(curved);
+
+    _bounce = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    );
+    _bounceY = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 0.0,
+          end: -9.0,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 14,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: -9.0,
+          end: 0.0,
+        ).chain(CurveTween(curve: Curves.bounceOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(tween: ConstantTween(0.0), weight: 56),
+    ]).animate(_bounce);
+
+    Future.delayed(Duration(milliseconds: widget.index * 110), () {
+      if (mounted) _enter.forward();
+    });
+    Future.delayed(Duration(milliseconds: 700 + widget.index * 350), () {
+      if (mounted) _bounce.repeat();
+    });
+  }
+
+  @override
+  void dispose() {
+    _enter.dispose();
+    _bounce.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final c = widget.iconColor;
+
+    final titleColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final subtitleColor = isDark ? Colors.white60 : Colors.grey.shade600;
+
+    final gradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: isDark
+          ? [c.withValues(alpha: 0.22), const Color(0xFF1A1A2E)]
+          : [c.withValues(alpha: 0.10), Colors.white],
+    );
+
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: AnimatedScale(
+          scale: _pressed ? 0.95 : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: c.withValues(alpha: isDark ? 0.18 : 0.14),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              child: Ink(
+                decoration: BoxDecoration(
+                  gradient: gradient,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: c.withValues(alpha: 0.18)),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  splashColor: c.withValues(alpha: 0.10),
+                  highlightColor: Colors.transparent,
+                  onHighlightChanged: (v) => setState(() => _pressed = v),
+                  onTap: widget.onTap,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          right: -10,
+                          bottom: -12,
+                          child: Icon(
+                            widget.icon,
+                            size: 78,
+                            color: c.withValues(alpha: isDark ? 0.10 : 0.07),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                                children: [
+                                  AnimatedBuilder(
+                                    animation: _bounce,
+                                    builder: (_, child) => Transform.translate(
+                                      offset: Offset(0, _bounceY.value),
+                                      child: child,
+                                    ),
+                                    child: Container(
+                                      height: 46,
+                                      width: 46,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Color.lerp(c, Colors.white, 0.25)!,
+                                            c,
+                                          ],
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: c.withValues(alpha: 0.35),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Icon(
+                                        widget.icon,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    height: 26,
+                                    width: 26,
+                                    decoration: BoxDecoration(
+                                      color: c.withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.arrow_outward_rounded,
+                                      size: 14,
+                                      color: c,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              Text(
+                                widget.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                  color: titleColor,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: subtitleColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -656,8 +1192,10 @@ class _StateCard extends StatelessWidget {
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 elevation: 0,
-                padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -673,7 +1211,6 @@ class _StateCard extends StatelessWidget {
 // =============================================================
 // Subject Note Card
 // =============================================================
-
 class SubjectNoteCard extends StatelessWidget {
   final SubjectNotes note;
   final bool isDark;
@@ -745,8 +1282,9 @@ class SubjectNoteCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ClipRRect(
-                  borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(18)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18),
+                  ),
                   child: SizedBox(
                     height: 92,
                     width: double.infinity,
@@ -795,7 +1333,6 @@ class SubjectNoteCard extends StatelessWidget {
                     ),
                   ),
                 ),
-
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),

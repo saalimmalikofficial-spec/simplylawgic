@@ -1,4 +1,5 @@
 // lib/models/subject_notes.dart
+
 class SubjectNotes {
   final String id;
   final String slug;
@@ -57,13 +58,27 @@ class SubjectNotes {
     return jsonList.map((json) => SubjectNotes.fromJson(json)).toList();
   }
 
-  /// 👇 Pehla pdf_purchase block nikaalo (purchase CTA ke liye)
+  /// 👇 Pehla pdf_purchase block nikaalo
   Block? get purchaseBlock {
     try {
       return blocks.firstWhere((b) => b.type == 'pdf_purchase');
     } catch (_) {
       return null;
     }
+  }
+
+  /// 🔥 Whether user can access this note (purchased / hasAccess / unlocked)
+  bool get canAccess {
+    final pb = purchaseBlock;
+    if (pb == null) return false;
+    return pb.purchased || pb.hasAccess || pb.unlocked;
+  }
+
+  /// 🔥 Whether note is locked (has purchase block but not purchased)
+  bool get isLocked {
+    final pb = purchaseBlock;
+    if (pb == null) return false;
+    return !(pb.purchased || pb.hasAccess || pb.unlocked);
   }
 
   /// 👇 Preview blocks — purchase block se pehle ke blocks
@@ -87,11 +102,27 @@ class Block {
   final String type;
   final Payload payload;
 
+  // 🔥 pdf_purchase access fields
+  final bool purchased;
+  final bool hasAccess;
+  final bool unlocked;
+  final String? accessToken;
+  final String? accessPath;
+  final String? streamPath;
+  final String? streamUrl;
+
   Block({
     required this.id,
     required this.order,
     required this.type,
     required this.payload,
+    required this.purchased,
+    required this.hasAccess,
+    required this.unlocked,
+    this.accessToken,
+    this.accessPath,
+    this.streamPath,
+    this.streamUrl,
   });
 
   factory Block.fromJson(Map<String, dynamic> json) {
@@ -100,8 +131,18 @@ class Block {
       order: json['order'] ?? 0,
       type: json['type'] ?? '',
       payload: Payload.fromJson(json['payload'] ?? {}),
+      purchased: json['purchased'] ?? false,
+      hasAccess: json['hasAccess'] ?? false,
+      unlocked: json['unlocked'] ?? false,
+      accessToken: json['accessToken'],
+      accessPath: json['accessPath'],
+      streamPath: json['streamPath'],
+      streamUrl: json['streamUrl'],
     );
   }
+
+  /// 🔥 Quick access check
+  bool get canAccess => purchased || hasAccess || unlocked;
 }
 
 class Payload {
@@ -167,7 +208,8 @@ class Payload {
       caption: json['caption'],
       images: json['images'] != null
           ? List<Map<String, dynamic>>.from(
-        (json['images'] as List).map((e) => Map<String, dynamic>.from(e)),
+        (json['images'] as List)
+            .map((e) => Map<String, dynamic>.from(e)),
       )
           : null,
     );

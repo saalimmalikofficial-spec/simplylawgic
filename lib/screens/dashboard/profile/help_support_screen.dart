@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:simplylawgic/screens/auth/sign_in_screen.dart';
+import 'package:simplylawgic/services/api_service.dart';
+import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/utils/app_colors.dart';
 
 class HelpSupportScreen extends StatefulWidget {
@@ -25,6 +28,22 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   void dispose() {
     _messageController.dispose();
     super.dispose();
+  }
+
+  // ---------- Delete Account ----------
+  Future<void> _onDeleteAccountTap(bool isDark) async {
+    final shouldDelete = await _showDeleteAccountDialog(context, isDark);
+
+    if (shouldDelete == true) {
+      final storage = StorageService();
+      await storage.clearAll();
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SignInScreen()),
+            (route) => false,
+      );
+    }
   }
 
   @override
@@ -99,7 +118,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'We\'re here to assist you 24/7',
+                          'Send us a message or email anytime',
                           style: TextStyle(
                             fontSize: 14,
                             color: isDark ? Colors.white60 : AppColors.textSecondary,
@@ -141,14 +160,19 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             ),
             _buildFaqItem(
               question: 'How do I contact support?',
-              answer: 'You can contact us through this form, email us at support@simplylawgic.com, or call us at +1 234 567 8900.',
+              answer: 'You can contact us through this form or email us directly at support@simplylawgic.com.',
               isDark: isDark,
             ),
             const SizedBox(height: 24),
 
+            // Direct Email Card
+            _buildEmailCard(isDark),
+
+            const SizedBox(height: 24),
+
             // Contact Form
             Text(
-              'Contact Us',
+              'Send us a Message',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -170,6 +194,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 children: [
                   // Category Dropdown
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
                       border: Border.all(
@@ -179,6 +204,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
+                        isExpanded: true,
                         value: _selectedCategory,
                         icon: Icon(
                           Icons.arrow_drop_down,
@@ -284,46 +310,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Quick Contact Options
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickContact(
-                    icon: Icons.email_rounded,
-                    label: 'Email',
-                    detail: 'support@...',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Email: support@simplylawgic.com'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
-                    isDark: isDark,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickContact(
-                    icon: Icons.phone_rounded,
-                    label: 'Call',
-                    detail: '+1 234...',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Call: +1 234 567 8900'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
-                    isDark: isDark,
-                  ),
-                ),
-              ],
-            ),
+            // Danger Zone — Delete Account
+            _buildDeleteAccountCard(isDark),
             const SizedBox(height: 20),
           ],
         ),
@@ -372,15 +362,16 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     );
   }
 
-  Widget _buildQuickContact({
-    required IconData icon,
-    required String label,
-    required String detail,
-    required VoidCallback onTap,
-    required bool isDark,
-  }) {
+  Widget _buildEmailCard(bool isDark) {
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email support: support@simplylawgic.com'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -391,33 +382,307 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             color: isDark ? Colors.white.withOpacity(0.06) : AppColors.border,
           ),
         ),
-        child: Column(
+        child: Row(
           children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.email_rounded,
+                color: AppColors.primary,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Direct Email Support',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'support@simplylawgic.com',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white60 : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Icon(
-              icon,
-              color: AppColors.primary,
-              size: 28,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              detail,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white60 : AppColors.textSecondary,
-              ),
+              Icons.chevron_right_rounded,
+              color: isDark ? Colors.white38 : AppColors.textSecondary,
             ),
           ],
         ),
       ),
+    );
+  }
+
+  // ---------- Delete Account Card ----------
+  Widget _buildDeleteAccountCard(bool isDark) {
+    return InkWell(
+      onTap: () => _onDeleteAccountTap(isDark),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.danger.withOpacity(isDark ? 0.10 : 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.danger.withOpacity(0.25)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.delete_forever_outlined,
+                color: AppColors.danger,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Delete Account',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.danger,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Permanently remove your account & data',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white60 : AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.danger,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<bool?> _showDeleteAccountDialog(
+      BuildContext context,
+      bool isDark,
+      ) async {
+    const List<String> reasons = [
+      'I no longer need this account',
+      'I created a duplicate account',
+      'I am not satisfied with the app',
+      'Privacy or security concerns',
+      'Too many notifications',
+      'I found a better alternative',
+      'Other',
+    ];
+
+    String selectedReason = reasons.first;
+    bool isDeleting = false;
+
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setState) {
+            final api = ApiService();
+
+            Future<void> handleDelete() async {
+              setState(() => isDeleting = true);
+              try {
+                await api.deleteAccount(selectedReason);
+
+                if (!dialogContext.mounted) return;
+
+                Navigator.pop(dialogContext, true);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text(
+                      'Your account has been deleted successfully.',
+                    ),
+                    backgroundColor: Colors.green.shade600,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              } catch (e) {
+                setState(() => isDeleting = false);
+                if (!dialogContext.mounted) return;
+
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      e.toString().replaceFirst('Exception: ', ''),
+                    ),
+                    backgroundColor: AppColors.danger,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+            }
+
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              title: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.danger.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.delete_forever_outlined,
+                      color: AppColors.danger,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Delete Account',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'This action is permanent. Your account and all '
+                          'associated data will be removed and cannot be '
+                          'recovered.\n\nWhy are you deleting your account?',
+                      style: TextStyle(
+                        color:
+                        isDark ? Colors.white70 : AppColors.textSecondary,
+                        height: 1.4,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...reasons.map(
+                          (reason) => RadioListTile<String>(
+                        value: reason,
+                        groupValue: selectedReason,
+                        onChanged: isDeleting
+                            ? null
+                            : (val) {
+                          if (val != null) {
+                            setState(() => selectedReason = val);
+                          }
+                        },
+                        title: Text(
+                          reason,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark
+                                ? Colors.white70
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                        activeColor: AppColors.danger,
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              actions: [
+                TextButton(
+                  onPressed: isDeleting
+                      ? null
+                      : () => Navigator.pop(dialogContext, false),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isDark ? Colors.white60 : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                  ),
+                  onPressed: isDeleting ? null : handleDelete,
+                  child: isDeleting
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                      : const Text(
+                    'Delete Account',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

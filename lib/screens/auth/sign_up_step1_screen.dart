@@ -1,6 +1,9 @@
 // lib/screens/auth/sign_up_step1_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sms_autofill/sms_autofill.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:simplylawgic/services/api_service.dart';
 import 'package:simplylawgic/services/storage_service.dart';
 import 'package:simplylawgic/utils/validators.dart';
@@ -16,22 +19,115 @@ class SignUpStep1Screen extends StatefulWidget {
   State<SignUpStep1Screen> createState() => _SignUpStep1ScreenState();
 }
 
-class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
+class _SignUpStep1ScreenState extends State<SignUpStep1Screen> with CodeAutoFill {
   bool _otpSent = false;
   bool _isLoading = false;
+  bool _acceptedTerms = false;
   String? _errorMessage;
   String? _phoneVerificationToken;
   int _otpExpirySeconds = 600;
 
   final _phoneController = TextEditingController();
-  final List<TextEditingController> _otpControllers = List.generate(4, (_) => TextEditingController());
+  final List<TextEditingController> _otpControllers =
+  List.generate(4, (_) => TextEditingController());
   final List<FocusNode> _otpFocusNodes = List.generate(4, (_) => FocusNode());
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
   final StorageService _storage = StorageService();
 
+  static const MethodChannel _smsChannel =
+  MethodChannel('com.bettlebyte.simplylawgic/sms');
+
+  @override
+  void initState() {
+    super.initState();
+    _setupSmsChannel();
+    _printAppSignature();
+    _requestSmsPermission();
+  }
+
+  void _setupSmsChannel() {
+    _smsChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onSmsReceived') {
+        final String message = call.arguments as String;
+        _extractOTPFromSms(message);
+      }
+    });
+  }
+
+  void _extractOTPFromSms(String message) {
+    final regex = RegExp(r'\b\d{4}\b');
+    final matches = regex.allMatches(message);
+    if (matches.isNotEmpty) {
+      final otp = matches.last.group(0)!;
+      if (mounted) {
+        for (int i = 0; i < 4 && i < otp.length; i++) {
+          _otpControllers[i].text = otp[i];
+        }
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _requestSmsPermission() async {
+    final smsStatus = await Permission.sms.status;
+    if (!smsStatus.isGranted) {
+      final result = await Permission.sms.request();
+      if (result.isPermanentlyDenied && mounted) {
+        _showPermissionDialog();
+      }
+    }
+  }
+
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('SMS Permission Required'),
+        content: const Text(
+          'To auto-fill OTP, we need SMS permission. Please enable it from app settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _printAppSignature() async {
+    try {
+      await SmsAutoFill().getAppSignature;
+    } catch (_) {}
+  }
+
+  @override
+  void codeUpdated() {
+    if (code != null && code!.length >= 4) {
+      final digitsOnly = code!.replaceAll(RegExp(r'\D'), '');
+      if (digitsOnly.length >= 4) {
+        final otp = digitsOnly.substring(0, 4);
+        for (int i = 0; i < 4; i++) {
+          _otpControllers[i].text = otp[i];
+        }
+        setState(() {});
+      }
+    }
+  }
+
   @override
   void dispose() {
+    cancel();
     _phoneController.dispose();
     for (var controller in _otpControllers) {
       controller.dispose();
@@ -43,7 +139,12 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
   }
 
   Future<void> _sendOTP() async {
-    if (!_formKey.currentState!.validate()) {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (!_acceptedTerms) {
+      setState(() {
+        _errorMessage = "Please accept Terms & Conditions and Privacy Policy to continue.";
+      });
       return;
     }
 
@@ -53,6 +154,12 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
     });
 
     try {
+      final smsStatus = await Permission.sms.status;
+      if (!smsStatus.isGranted) {
+        await Permission.sms.request();
+      }
+
+      await SmsAutoFill().listenForCode();
       final cleanPhone = _phoneController.text.replaceAll(RegExp(r'\D'), '');
       final response = await _apiService.sendOTP(cleanPhone);
 
@@ -66,10 +173,9 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(response['message'] ?? 'OTP sent successfully'),
-            backgroundColor: Colors.green.shade600,
+            backgroundColor: const Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -80,23 +186,16 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _verifyOTP() async {
-    // Validate all OTP fields
     String otp = '';
     for (int i = 0; i < 4; i++) {
       final value = _otpControllers[i].text.trim();
       if (value.isEmpty || value.length != 1 || !RegExp(r'^\d$').hasMatch(value)) {
-        setState(() {
-          _errorMessage = 'Please enter a valid 4-digit OTP';
-        });
+        setState(() => _errorMessage = 'Please enter a valid 4-digit OTP');
         return;
       }
       otp += value;
@@ -112,64 +211,33 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
       final response = await _apiService.verifyOTP(cleanPhone, otp);
 
       if (mounted) {
-        // Check if user already exists (response contains token and student)
         if (response.containsKey('token') && response.containsKey('student')) {
-          // User exists - handle sign in
           final student = Student.fromJson(response['student']);
           final profileComplete = response['profileComplete'] ?? false;
 
-          // Save using the comprehensive method
           await _storage.saveToken(response['token']);
           await _storage.saveStudent(student);
           await _storage.saveProfileComplete(profileComplete);
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response['message'] ?? 'Signed in successfully!'),
-              backgroundColor: Colors.green.shade600,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-
-          // Navigate based on profile completion
           if (profileComplete) {
-            // Profile is complete → go to Dashboard
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (context) => const DashboardScreen()),
                   (route) => false,
             );
           } else {
-            // Profile is incomplete → go to Step 2
-            // For existing user with incomplete profile, pass token or empty string
             final String token = response['token'] ?? '';
-
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(
                 builder: (context) => SignUpStep2Screen(
                   phone: cleanPhone,
-                  phoneVerificationToken: token, // Pass the token with null safety
+                  phoneVerificationToken: token,
                 ),
               ),
                   (route) => false,
             );
           }
         } else if (response.containsKey('phoneVerificationToken')) {
-          // New user - complete sign up
           _phoneVerificationToken = response['phoneVerificationToken'];
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response['message'] ?? 'Phone verified successfully'),
-              backgroundColor: Colors.green.shade600,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-
-          // Navigate to Step 2 with phone and verification token
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -179,8 +247,6 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
               ),
             ),
           );
-        } else {
-          throw Exception('Invalid response from server');
         }
       }
     } catch (e) {
@@ -190,11 +256,7 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -209,72 +271,77 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark ? const Color(0xFF0A0A0F) : AppColors.background;
-    final textColor = isDark ? Colors.white : AppColors.textPrimary;
-    final secondaryTextColor = isDark ? Colors.white70 : AppColors.textSecondary;
-    final cardColor = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF7F8FA);
-    final borderColor = isDark ? Colors.white.withOpacity(0.1) : AppColors.border;
-    final appBarColor = isDark ? const Color(0xFF12121A) : Colors.transparent;
+    final backgroundColor = isDark ? const Color(0xFF0F111A) : const Color(0xFFF8FAFC);
+    final cardColor = isDark ? const Color(0xFF181A26) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1E293B);
+    final secondaryTextColor = isDark ? Colors.white60 : const Color(0xFF64748B);
+    final borderColor = isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFE2E8F0);
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: appBarColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: textColor),
-          onPressed: _isLoading ? null : () => Navigator.pop(context),
-        ),
-      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Form(
             key: _formKey,
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo
-                Center(
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    height: 100,
-                    fit: BoxFit.contain,
+                const SizedBox(height: 12),
+
+                // Top Logo (Same as Login Screen)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: cardColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      height: 48,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
 
                 Text(
-                  _otpSent ? "Verify mobile number" : "Get started",
+                  _otpSent ? "Verify Mobile Number" : "Get Started 👋",
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.w800,
                     color: textColor,
                     letterSpacing: -0.5,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   _otpSent
                       ? "Enter the 4-digit code sent to +91 ${_phoneController.text.replaceAll(RegExp(r'\D'), '')}"
-                      : "Enter your phone number to receive an OTP",
-                  style: TextStyle(color: secondaryTextColor, fontSize: 15),
+                      : "Enter your mobile number to get registered",
+                  style: TextStyle(color: secondaryTextColor, fontSize: 13),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
                 if (_errorMessage != null) ...[
-                  _ErrorBanner(message: _errorMessage!, isDark: isDark),
-                  const SizedBox(height: 16),
+                  _ErrorBanner(message: _errorMessage!),
+                  const SizedBox(height: 12),
                 ],
 
                 if (!_otpSent) ...[
-                  Text(
-                    "Phone number",
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: secondaryTextColor),
-                  ),
-                  const SizedBox(height: 8),
+                  _buildInputLabel("Phone Number", textColor),
+                  const SizedBox(height: 6),
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
@@ -282,81 +349,133 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                     validator: Validators.validatePhone,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     maxLength: 10,
-                    style: TextStyle(fontSize: 15, color: textColor),
+                    style: TextStyle(fontSize: 14, color: textColor, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
                       hintText: "98765 43210",
-                      hintStyle: TextStyle(color: secondaryTextColor.withOpacity(0.6), fontSize: 14),
+                      hintStyle: TextStyle(color: secondaryTextColor.withOpacity(0.5), fontSize: 13),
                       prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 16, right: 8),
-                        child: Text(
-                          "+91",
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor),
+                        padding: const EdgeInsets.only(left: 14, right: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              "🇮🇳 +91",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: textColor,
+                              ),
+                            ),
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              height: 16,
+                              width: 1,
+                              color: borderColor,
+                            ),
+                          ],
                         ),
                       ),
                       prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
                       filled: true,
                       fillColor: cardColor,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
                       counterText: "",
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: borderColor)
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
                       ),
                       enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: borderColor)
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
                       ),
                       focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppColors.primary, width: 1.6)
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                       ),
                       errorBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppColors.error, width: 1.4)
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.error, width: 1.2),
                       ),
                       focusedErrorBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppColors.error, width: 1.6)
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.error, width: 1.5),
                       ),
-                      errorStyle: const TextStyle(color: AppColors.error, fontSize: 12),
                     ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Terms & Conditions Checkbox
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Checkbox(
+                          value: _acceptedTerms,
+                          activeColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          side: BorderSide(color: borderColor, width: 1.5),
+                          onChanged: _isLoading
+                              ? null
+                              : (value) {
+                            setState(() {
+                              _acceptedTerms = value ?? false;
+                              if (_acceptedTerms) _errorMessage = null;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text("I agree to the ", style: TextStyle(fontSize: 12, color: secondaryTextColor)),
+                            _LegalLink(label: "Terms & Conditions", url: "https://simplylawgic.com/terms"),
+                            Text(" & ", style: TextStyle(fontSize: 12, color: secondaryTextColor)),
+                            _LegalLink(label: "Privacy Policy", url: "https://simplylawgic.com/privacy"),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 28),
+
+                  const SizedBox(height: 20),
+
+                  // Get OTP Button
                   SizedBox(
                     width: double.infinity,
-                    height: 54,
+                    height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
+                        disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      onPressed: _isLoading ? null : _sendOTP,
+                      onPressed: (_isLoading || !_acceptedTerms) ? null : _sendOTP,
                       child: _isLoading
                           ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                           : const Text(
                         "Get OTP",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
                     ),
                   ),
                 ] else ...[
-                  // OTP Input Fields
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: List.generate(
                       4,
                           (index) => SizedBox(
-                        width: 64,
-                        height: 64,
+                        width: 60,
+                        height: 52,
                         child: TextFormField(
                           controller: _otpControllers[index],
                           focusNode: _otpFocusNodes[index],
@@ -364,89 +483,78 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
                           keyboardType: TextInputType.number,
                           enabled: !_isLoading,
                           maxLength: 1,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: textColor,
-                          ),
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: textColor),
                           decoration: InputDecoration(
                             counterText: "",
                             filled: true,
                             fillColor: cardColor,
+                            contentPadding: EdgeInsets.zero,
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(color: borderColor),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(color: borderColor),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                             ),
                           ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                           onChanged: (value) => _onOTPChanged(value, index),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 18),
-
-                  // Timer and resend OTP
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Expires in ${_otpExpirySeconds ~/ 60}:${(_otpExpirySeconds % 60).toString().padLeft(2, '0')}',
-                        style: TextStyle(color: secondaryTextColor, fontSize: 13),
+                        style: TextStyle(color: secondaryTextColor, fontSize: 12),
                       ),
                       TextButton(
                         style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                          padding: EdgeInsets.zero,
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         onPressed: _isLoading ? null : _sendOTP,
-                        child: Text(
+                        child: const Text(
                           'Resend OTP',
-                          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
+                          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 12),
                         ),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 28),
-
+                  const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
-                    height: 54,
+                    height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
-                        disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: _isLoading ? null : _verifyOTP,
                       child: _isLoading
                           ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                           : const Text(
                         "Verify & Next",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
                     ),
                   ),
                 ],
-
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -454,43 +562,83 @@ class _SignUpStep1ScreenState extends State<SignUpStep1Screen> {
       ),
     );
   }
+
+  Widget _buildInputLabel(String text, Color color) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: color,
+      ),
+    );
+  }
 }
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
-  final bool isDark;
-
-  const _ErrorBanner({
-    required this.message,
-    required this.isDark,
-  });
+  const _ErrorBanner({required this.message});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.error.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.error.withOpacity(0.25)),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.error.withOpacity(0.2)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
-          const SizedBox(width: 10),
+          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-                message,
-                style: const TextStyle(
-                    color: AppColors.error,
-                    fontSize: 13,
-                    height: 1.3
-                )
+              message,
+              style: const TextStyle(
+                color: AppColors.error,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LegalLink extends StatelessWidget {
+  final String label;
+  final String url;
+
+  const _LegalLink({required this.label, required this.url});
+
+  Future<void> _open(BuildContext context) async {
+    final uri = Uri.parse(url);
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $label'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => _open(context),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          decoration: TextDecoration.underline,
+        ),
       ),
     );
   }

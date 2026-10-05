@@ -42,6 +42,10 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // ✅ Dashboard (Progress) screen ka GlobalKey
+  final GlobalKey<UserProgressScreenState> _progressScreenKey =
+  GlobalKey<UserProgressScreenState>();
+
   // ============================================================
   // TAB NAVIGATORS
   // ============================================================
@@ -160,7 +164,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       return;
     }
 
+    // ✅ Agar same tab par dobara click kiya, toh refresh karo
     if (_currentIndex == index) {
+      _refreshCurrentTab(index);
       return;
     }
 
@@ -169,6 +175,14 @@ class _DashboardScreenState extends State<DashboardScreen>
       _tabHistory.remove(index);
       _tabHistory.add(index);
     });
+  }
+
+  // ✅ Current tab ko refresh karne ka handler
+  void _refreshCurrentTab(int index) {
+    // Dashboard (Progress) tab = index 2
+    if (index == 2) {
+      _progressScreenKey.currentState?.refreshData();
+    }
   }
 
   // ============================================================
@@ -191,10 +205,15 @@ class _DashboardScreenState extends State<DashboardScreen>
             page = const BatchesTab();
             break;
           case 2:
-            page = const UserProgressScreen();
+          // ✅ Bottom nav tab — back button nahi chahiye
+            page = UserProgressScreen(
+              key: _progressScreenKey,
+              showBackButton: false,
+            );
             break;
           case 3:
-            page = const TestsTab();
+          // ✅ Bottom nav tab — AppBar nahi chahiye
+            page = const TestsTab(showBackButton: false);
             break;
           case 4:
             page = const EditProfileScreen();
@@ -333,7 +352,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
       if (!mounted) return;
 
-      // 🔥🔥🔥 RESET THEME TO LIGHT MODE
+      // 🔥 RESET THEME TO LIGHT MODE
       await themeManager.setTheme(false);
 
       // 2. Clear all tab navigators

@@ -21,15 +21,33 @@ class AllSubjectNotesScreen extends StatefulWidget {
 
 class _AllSubjectNotesScreenState extends State<AllSubjectNotesScreen> {
   final ApiService _apiService = ApiService();
+  final TextEditingController _searchController = TextEditingController();
 
-  List<SubjectNotes> _notes = [];
+  List<SubjectNotes> _allNotes = [];
+  List<SubjectNotes> _filteredNotes = [];
   bool _isLoading = true;
   String? _errorMessage;
+
+  String _selectedCategory = 'All';
+  final List<String> _categories = [
+    'All',
+    'Major Laws',
+    'Minor Laws',
+    'Procedural Laws',
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadNotes();
+    _searchController.addListener(_onSearchOrFilterChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchOrFilterChanged);
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadNotes() async {
@@ -42,7 +60,10 @@ class _AllSubjectNotesScreenState extends State<AllSubjectNotesScreen> {
     try {
       final notes = await _apiService.getSubjectNotes();
       if (!mounted) return;
-      setState(() => _notes = notes);
+      setState(() {
+        _allNotes = notes;
+        _applyFilters();
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -51,6 +72,32 @@ class _AllSubjectNotesScreenState extends State<AllSubjectNotesScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _onSearchOrFilterChanged() {
+    _applyFilters();
+  }
+
+  void _applyFilters() {
+    final query = _searchController.text.trim().toLowerCase();
+
+    setState(() {
+      _filteredNotes = _allNotes.where((note) {
+        // Category Filter
+        final matchesCategory = _selectedCategory == 'All' ||
+            note.subjectCategory.toLowerCase() ==
+                _selectedCategory.toLowerCase();
+
+        // Search Query Filter
+        final matchesQuery = query.isEmpty ||
+            note.displayTitle.toLowerCase().contains(query) ||
+            note.subjectName.toLowerCase().contains(query) ||
+            note.tagline.toLowerCase().contains(query) ||
+            note.subjectCategory.toLowerCase().contains(query);
+
+        return matchesCategory && matchesQuery;
+      }).toList();
+    });
   }
 
   @override
@@ -88,11 +135,183 @@ class _AllSubjectNotesScreenState extends State<AllSubjectNotesScreen> {
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: _loadNotes,
-        child: _buildBody(isDark, secondaryTextColor),
+        child: Column(
+          children: [
+            if (!_isLoading && _errorMessage == null) ...[
+              _buildSearchBar(isDark, textColor, secondaryTextColor),
+              _buildCategoryChips(isDark),
+              _buildResultCount(secondaryTextColor),
+            ],
+            Expanded(
+              child: _buildBody(isDark, secondaryTextColor),
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  // =============================================================
+  // Search Bar
+  // =============================================================
+  Widget _buildSearchBar(
+      bool isDark,
+      Color textColor,
+      Color secondaryTextColor,
+      ) {
+    final cardColor = isDark ? const Color(0xFF161622) : Colors.white;
+    final borderColor =
+    isDark ? Colors.white.withValues(alpha: 0.08) : AppColors.border;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.2)
+                  : AppColors.cardShadow,
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: TextField(
+          controller: _searchController,
+          style: TextStyle(fontSize: 14, color: textColor),
+          textAlignVertical: TextAlignVertical.center,
+          decoration: InputDecoration(
+            hintText: 'Search notes by title, subject, or law...',
+            hintStyle: TextStyle(
+              fontSize: 13,
+              color: secondaryTextColor.withValues(alpha: 0.7),
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: secondaryTextColor,
+            ),
+            suffixIcon: _searchController.text.isNotEmpty
+                ? IconButton(
+              icon: Icon(
+                Icons.clear_rounded,
+                size: 18,
+                color: secondaryTextColor,
+              ),
+              onPressed: () {
+                _searchController.clear();
+              },
+            )
+                : null,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =============================================================
+  // Category Filter Chips
+  // =============================================================
+  Widget _buildCategoryChips(bool isDark) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: _categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final category = _categories[index];
+          final isSelected = _selectedCategory == category;
+
+          return ChoiceChip(
+            label: Text(category),
+            selected: isSelected,
+            onSelected: (selected) {
+              if (selected) {
+                setState(() {
+                  _selectedCategory = category;
+                  _applyFilters();
+                });
+              }
+            },
+            selectedColor: AppColors.primary,
+            backgroundColor: isDark ? const Color(0xFF161622) : Colors.white,
+            labelStyle: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? Colors.white70 : AppColors.textDark),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: isSelected
+                    ? AppColors.primary
+                    : (isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : AppColors.border),
+              ),
+            ),
+            showCheckmark: false,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          );
+        },
+      ),
+    );
+  }
+
+  // =============================================================
+  // Result Counter
+  // =============================================================
+  Widget _buildResultCount(Color secondaryTextColor) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Showing ${_filteredNotes.length} ${_filteredNotes.length == 1 ? 'note' : 'notes'}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: secondaryTextColor,
+            ),
+          ),
+          if (_selectedCategory != 'All' || _searchController.text.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                _searchController.clear();
+                setState(() {
+                  _selectedCategory = 'All';
+                  _applyFilters();
+                });
+              },
+              child: const Text(
+                'Reset Filters',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // =============================================================
+  // Main Body
+  // =============================================================
   Widget _buildBody(bool isDark, Color secondaryTextColor) {
     if (_isLoading) {
       return const Center(
@@ -107,22 +326,22 @@ class _AllSubjectNotesScreenState extends State<AllSubjectNotesScreen> {
       return _buildErrorState(isDark, secondaryTextColor);
     }
 
-    if (_notes.isEmpty) {
+    if (_filteredNotes.isEmpty) {
       return _buildEmptyState(isDark, secondaryTextColor);
     }
 
     return GridView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         crossAxisSpacing: 14,
         mainAxisSpacing: 14,
         childAspectRatio: 0.72,
       ),
-      itemCount: _notes.length,
+      itemCount: _filteredNotes.length,
       itemBuilder: (context, index) {
-        final note = _notes[index];
+        final note = _filteredNotes[index];
         return SubjectNoteGridCard(
           note: note,
           isDark: isDark,
@@ -143,7 +362,6 @@ class _AllSubjectNotesScreenState extends State<AllSubjectNotesScreen> {
     isDark ? Colors.white.withValues(alpha: 0.06) : AppColors.border;
 
     return ListView(
-      // so pull-to-refresh works
       padding: const EdgeInsets.all(24),
       children: [
         Container(
@@ -204,6 +422,9 @@ class _AllSubjectNotesScreenState extends State<AllSubjectNotesScreen> {
     final borderColor =
     isDark ? Colors.white.withValues(alpha: 0.06) : AppColors.border;
 
+    final isSearching =
+        _searchController.text.isNotEmpty || _selectedCategory != 'All';
+
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -223,21 +444,38 @@ class _AllSubjectNotesScreenState extends State<AllSubjectNotesScreen> {
                   color: AppColors.primary.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.menu_book_rounded,
+                child: Icon(
+                  isSearching
+                      ? Icons.search_off_rounded
+                      : Icons.menu_book_rounded,
                   size: 26,
                   color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: 12),
               Text(
-                'No notes available',
+                isSearching
+                    ? 'No matching notes found'
+                    : 'No notes available',
                 style: TextStyle(
                   color: secondaryTextColor,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
               ),
+              if (isSearching) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _selectedCategory = 'All';
+                      _applyFilters();
+                    });
+                  },
+                  child: const Text('Clear Search & Filters'),
+                ),
+              ],
             ],
           ),
         ),
@@ -255,7 +493,7 @@ class SubjectNoteGridCard extends StatelessWidget {
   final bool isDark;
   final VoidCallback onTap;
 
-  /// 🔥 Default fallback image
+  /// Fallback image
   static const String _defaultImageUrl =
       'https://images.unsplash.com/photo-1505664194779-8beaceb93744?auto=format&fit=crop&w=800&q=80';
 

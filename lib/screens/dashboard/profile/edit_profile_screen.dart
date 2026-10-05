@@ -1,13 +1,14 @@
 // lib/screens/profile/profile_detail_screen.dart
-// lib/screens/profile/profile_detail_screen.dart
-import 'dart:io';   // ✅ correct
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-// ... rest of your imports
 
+import 'package:simplylawgic/screens/auth/sign_in_screen.dart';
 import 'package:simplylawgic/screens/dashboard/profile/select_name_exam_Screen.dart';
 import 'package:simplylawgic/screens/dashboard/profile/update_email_screen.dart';
-import 'package:simplylawgic/screens/dashboard/profile/update_phone_screen.dart';
+import 'package:simplylawgic/screens/dashboard/profile/update_phone_screen.dart'; // 👈 ADD
+
 import 'package:simplylawgic/utils/app_colors.dart';
 import 'package:simplylawgic/models/student_model.dart';
 import 'package:simplylawgic/services/api_service.dart';
@@ -16,7 +17,12 @@ import 'package:simplylawgic/services/student_notifier.dart';
 import 'package:simplylawgic/main.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key});
+  final bool showBackButton;
+
+  const EditProfileScreen({
+    super.key,
+    this.showBackButton = false,
+  });
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -64,6 +70,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   }
 
   Future<void> _toggleTheme() async {
+    HapticFeedback.selectionClick();
     await themeManager.toggleTheme();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -126,139 +133,6 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       } catch (_) {
         if (!mounted) return;
         setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _onEditName() async {
-    final currentName = _student?.name ?? '';
-    final TextEditingController controller =
-    TextEditingController(text: currentName);
-
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF1A1A26)
-            : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
-        title: const Text(
-          'Edit Full Name',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            hintText: 'Enter your full name',
-            filled: true,
-            fillColor: Theme.of(context).brightness == Brightness.dark
-                ? Colors.white.withOpacity(0.05)
-                : Colors.grey.shade100,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(
-                color: AppColors.primary,
-                width: 2,
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white60
-                    : Colors.grey.shade700,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () {
-              final value = controller.text.trim();
-              if (value.isEmpty) return;
-              Navigator.pop(dialogContext, value);
-            },
-            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (newName == null || newName.isEmpty || newName == currentName) {
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final response = await _apiService.updateProfile(
-        name: newName,
-        preparingForExam: _student?.preparingForExam ?? '',
-      );
-
-      Student? updatedStudent;
-      if (response['student'] is Map<String, dynamic>) {
-        updatedStudent = Student.fromJson(response['student']);
-      } else {
-        updatedStudent = _student != null
-            ? Student(
-          id: _student!.id,
-          name: newName,
-          email: _student!.email,
-          phone: _student!.phone,
-          preparingForExam: _student!.preparingForExam,
-          preparingForExamLabel: _student!.preparingForExamLabel,
-          authProvider: _student!.authProvider,
-          avatarUrl: _student!.avatarUrl,
-          referralCode: _student!.referralCode,
-          walletBalance: _student!.walletBalance,
-        )
-            : null;
-      }
-
-      if (updatedStudent != null) {
-        await _storage.saveStudent(updatedStudent);
-        StudentNotifier.instance.update(updatedStudent);
-
-        if (mounted) {
-          setState(() {
-            _student = updatedStudent;
-            _hasChanges = true;
-            _isLoading = false;
-          });
-        }
-      }
-
-      if (mounted) {
-        _showSnackBar('✅ Name updated successfully', Colors.green);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showSnackBar(
-          '❌ ${e.toString().replaceFirst('Exception: ', '')}',
-          Colors.red,
-        );
       }
     }
   }
@@ -384,7 +258,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
         width: 120,
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.04) : Colors.grey.shade100,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.04)
+              : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -415,7 +291,24 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       await _loadUserData();
     }
   }
-
+  Future<void> _onEditExam() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SelectExamScreen(
+          initialName: _student?.name,                          // 👈 name pass
+          initialExam: _student?.preparingForExam,              // 👈 exam pass
+        ),
+      ),
+    );
+    if (changed == true) {
+      _hasChanges = true;
+      await _loadUserData();
+    }
+  }
+  // ============================================================
+  // 👇 Phone Edit → UpdatePhoneScreen
+  // ============================================================
   Future<void> _onEditPhone() async {
     final changed = await Navigator.push<bool>(
       context,
@@ -427,22 +320,132 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     }
   }
 
-  Future<void> _onEditExam() async {
-    final changed = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (context) => const SelectExamScreen()),
+  // ============================================================
+  // Logout
+  // ============================================================
+  Future<void> _onLogoutTap(bool isDark) async {
+    final shouldLogout = await _showLogoutDialog(context, isDark);
+    if (shouldLogout != true) return;
+
+    await _storage.clearAll();
+    if (!mounted) return;
+
+    // 👇 rootNavigator: true — ye poora stack clear karega, bottom nav bhi gayab
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const SignInScreen()),
+          (route) => false,
     );
-    if (changed == true) {
-      _hasChanges = true;
-      await _loadUserData();
-    }
+  }
+  Future<bool?> _showLogoutDialog(BuildContext context, bool isDark) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.danger.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.logout_rounded,
+                color: AppColors.danger,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Logout',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to logout? You\'ll need to sign in again.',
+          style: TextStyle(
+            color: isDark ? Colors.white70 : AppColors.textSecondary,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: isDark ? Colors.white60 : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 10,
+              ),
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Logout',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: OutlinedButton.icon(
+          onPressed: () => _onLogoutTap(isDark),
+          icon: const Icon(Icons.logout_rounded, size: 20),
+          label: const Text(
+            'Logout',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.danger,
+            backgroundColor:
+            AppColors.danger.withValues(alpha: isDark ? 0.10 : 0.05),
+            side: BorderSide(
+              color: AppColors.danger.withValues(alpha: 0.35),
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showSnackBar(String message, Color color) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(fontWeight: FontWeight.w500)),
+        content:
+        Text(message, style: const TextStyle(fontWeight: FontWeight.w500)),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
@@ -460,7 +463,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     isDark ? const Color(0xFF0D0D14) : AppColors.background;
     final cardColor = isDark ? const Color(0xFF161622) : Colors.white;
     final borderColor =
-    isDark ? Colors.white.withOpacity(0.06) : AppColors.border;
+    isDark ? Colors.white.withValues(alpha: 0.06) : AppColors.border;
     final textColor = isDark ? Colors.white : AppColors.textPrimary;
     final secondaryTextColor =
     isDark ? Colors.white60 : AppColors.textSecondary;
@@ -475,29 +478,31 @@ class _EditProfileScreenState extends State<EditProfileScreen>
         backgroundColor: backgroundColor,
         extendBodyBehindAppBar: true,
         appBar: AppBar(
-          leading: IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-            ),
-            onPressed: () => Navigator.pop(context, _hasChanges),
-          ),
+          automaticallyImplyLeading: false,
           backgroundColor: Colors.transparent,
           elevation: 0,
+          systemOverlayStyle: SystemUiOverlayStyle.light,
+          leading: widget.showBackButton
+              ? IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context, _hasChanges),
+          )
+              : null,
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 16, top: 8),
               child: GestureDetector(
                 onTap: _toggleTheme,
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.18),
                     shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      width: 1,
+                    ),
                   ),
                   child: Icon(
                     themeManager.isDarkMode
@@ -523,7 +528,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _buildHeader(isDark),
+                _buildCurvedHeader(isDark),
                 Transform.translate(
                   offset: const Offset(0, -50),
                   child: Column(
@@ -532,9 +537,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                         onTap: _isUploadingAvatar
                             ? null
                             : _showAvatarSourceSheet,
-                        child: _buildProfilePicture(isDark, cardColor),
+                        child:
+                        _buildProfilePicture(isDark, cardColor),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
                       Text(
                         _student?.name ?? 'User',
                         style: TextStyle(
@@ -544,27 +550,82 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                           letterSpacing: -0.2,
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: AppColors.primary.withOpacity(0.2),
+                      const SizedBox(height: 10),
+
+                      // Badges Row (Exam & Wallet Chips)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.school_rounded,
+                                  size: 13,
+                                  color: AppColors.primary,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  _student?.preparingForExamLabel ??
+                                      'Aspirant',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          _student?.preparingForExamLabel ??
-                              'Aspirant',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: const Color(0xFF10B981)
+                                    .withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons
+                                      .account_balance_wallet_rounded,
+                                  size: 13,
+                                  color: Color(0xFF10B981),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '₹${_student?.formattedWalletBalance ?? 0}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF10B981),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
+
                       const SizedBox(height: 24),
                       Padding(
                         padding:
@@ -579,7 +640,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                             boxShadow: [
                               BoxShadow(
                                 color: isDark
-                                    ? Colors.black.withOpacity(0.2)
+                                    ? Colors.black
+                                    .withValues(alpha: 0.25)
                                     : AppColors.cardShadow,
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
@@ -588,19 +650,24 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                           ),
                           child: Column(
                             children: [
+                              // 1. Full Name
                               _buildDetailRow(
                                 icon: Icons.person_outline_rounded,
+                                iconColor: AppColors.primary,
                                 label: 'Full Name',
                                 value: _student?.name ?? 'Not set',
                                 isDark: isDark,
                                 textColor: textColor,
                                 secondaryTextColor:
                                 secondaryTextColor,
-                                onEdit: _onEditName,
+                                onEdit: null,
                               ),
                               _buildDivider(borderColor),
+
+                              // 2. Email
                               _buildDetailRow(
                                 icon: Icons.mail_outline_rounded,
+                                iconColor: const Color(0xFF10B981),
                                 label: 'Email Address',
                                 value: _student?.email ?? 'Not set',
                                 isDark: isDark,
@@ -610,8 +677,11 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                 onEdit: _onEditEmail,
                               ),
                               _buildDivider(borderColor),
+
+                              // 3. Phone  👈 ab onEdit lagaya
                               _buildDetailRow(
                                 icon: Icons.phone_outlined,
+                                iconColor: const Color(0xFF8B5CF6),
                                 label: 'Phone Number',
                                 value: _student?.phone ?? 'Not set',
                                 isDark: isDark,
@@ -621,22 +691,46 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                                 onEdit: _onEditPhone,
                               ),
                               _buildDivider(borderColor),
+
+                              // 4. Preparing For
                               _buildDetailRow(
                                 icon: Icons.school_outlined,
+                                iconColor: const Color(0xFFF59E0B),
                                 label: 'Preparing For',
-                                value: _student?.preparingForExamLabel ??
+                                value:
+                                _student?.preparingForExamLabel ??
                                     'Not set',
                                 isDark: isDark,
                                 textColor: textColor,
                                 secondaryTextColor:
                                 secondaryTextColor,
-                                isLast: true,
                                 onEdit: _onEditExam,
+                              ),
+                              _buildDivider(borderColor),
+
+                              // 5. Wallet Balance
+                              _buildDetailRow(
+                                icon: Icons
+                                    .account_balance_wallet_outlined,
+                                iconColor: const Color(0xFF10B981),
+                                label: 'Wallet Balance',
+                                value:
+                                '₹${_student?.formattedWalletBalance ?? 0}',
+                                isDark: isDark,
+                                textColor: textColor,
+                                secondaryTextColor:
+                                secondaryTextColor,
+                                onEdit: null,
+                                isLast: true,
                               ),
                             ],
                           ),
                         ),
                       ),
+
+                      // Logout
+                      const SizedBox(height: 20),
+                      _buildLogoutButton(isDark),
                       const SizedBox(height: 30),
                     ],
                   ),
@@ -649,116 +743,84 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
-  Widget _buildHeader(bool isDark) {
+  // ============================================================
+  // Curved Header Component
+  // ============================================================
+  Widget _buildCurvedHeader(bool isDark) {
     return ClipPath(
-      clipper: _HeaderCurveClipper(),
+      clipper: _HeaderClipper(),
       child: Container(
+        height: 220,
         width: double.infinity,
-        height: 200,
         decoration: BoxDecoration(
           gradient: LinearGradient(
+            colors: isDark
+                ? [const Color(0xFF1E1E2E), const Color(0xFF11111B)]
+                : [AppColors.primary, AppColors.primaryDark],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              AppColors.primary,
-              AppColors.primaryDark,
-            ],
           ),
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: -20,
-              right: -20,
-              child: Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.08),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 30,
-              left: -30,
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.06),
-                ),
-              ),
-            ),
-            const Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: EdgeInsets.only(top: 55),
-                child: Text(
-                  'Profile Settings',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 
   Widget _buildProfilePicture(bool isDark, Color cardColor) {
-    final avatarUrl = _student?.avatarUrl;
-    final name = _student?.name ?? 'User';
-
     return Stack(
       children: [
         Container(
-          width: 108,
-          height: 108,
+          width: 104,
+          height: 104,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: cardColor,
+            border: Border.all(color: cardColor, width: 4),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.25),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
-            border: Border.all(color: cardColor, width: 3.5),
           ),
-          child: ClipOval(
-            child: _isUploadingAvatar
-                ? Container(
-              color: Colors.black45,
+          child: CircleAvatar(
+            backgroundColor: AppColors.primary,
+            backgroundImage: _student?.avatarUrl != null
+                ? NetworkImage(_student!.avatarUrl!)
+                : null,
+            child: _student?.avatarUrl == null
+                ? Text(
+              (_student?.name.isNotEmpty ?? false)
+                  ? _student!.name[0].toUpperCase()
+                  : 'U',
+              style: const TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            )
+                : null,
+          ),
+        ),
+        if (_isUploadingAvatar)
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
               child: const Center(
                 child: SizedBox(
-                  width: 26,
-                  height: 26,
+                  width: 24,
+                  height: 24,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                    color: Colors.white,
+                    strokeWidth: 2,
                   ),
                 ),
               ),
-            )
-                : (avatarUrl != null && avatarUrl.isNotEmpty)
-                ? Image.network(
-              avatarUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  _buildInitials(name, isDark),
-            )
-                : _buildInitials(name, isDark),
-          ),
-        ),
-        if (!_isUploadingAvatar)
+            ),
+          )
+        else
           Positioned(
             bottom: 2,
             right: 2,
@@ -767,12 +829,12 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               decoration: BoxDecoration(
                 color: AppColors.primary,
                 shape: BoxShape.circle,
-                border: Border.all(color: cardColor, width: 2.5),
+                border: Border.all(color: cardColor, width: 2),
               ),
               child: const Icon(
                 Icons.camera_alt_rounded,
                 color: Colors.white,
-                size: 14,
+                size: 15,
               ),
             ),
           ),
@@ -780,52 +842,34 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     );
   }
 
-  Widget _buildInitials(String name, bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.primary,
-            AppColors.primaryDark,
-          ],
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : 'U',
-        style: const TextStyle(
-          fontSize: 38,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-
+  // ============================================================
+  // 🔥 Smart Detail Row → Empty pe "Add", filled pe "Edit"
+  // ============================================================
   Widget _buildDetailRow({
     required IconData icon,
+    required Color iconColor,
     required String label,
     required String value,
     required bool isDark,
     required Color textColor,
     required Color secondaryTextColor,
-    bool isLast = false,
     VoidCallback? onEdit,
+    bool isLast = false,
   }) {
+    final bool isEmpty = value.trim().isEmpty ||
+        value.trim().toLowerCase() == 'not set';
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
         children: [
           Container(
-            height: 42,
-            width: 42,
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: iconColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: AppColors.primary, size: 20),
+            child: Icon(icon, color: iconColor, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -844,72 +888,105 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 14.5,
-                    color: textColor,
+                    fontSize: 15,
+                    color: isEmpty
+                        ? secondaryTextColor.withValues(alpha: 0.75)
+                        : textColor,
                     fontWeight: FontWeight.w600,
+                    fontStyle:
+                    isEmpty ? FontStyle.italic : FontStyle.normal,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-          if (onEdit != null) ...[
-            const SizedBox(width: 8),
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: onEdit,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : AppColors.primary.withOpacity(0.06),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.edit_outlined,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ),
-          ],
+
+          // 👇 Action button
+          if (onEdit != null)
+            isEmpty
+                ? _buildAddButton(onEdit, iconColor)
+                : _buildEditIconButton(onEdit, isDark),
         ],
       ),
     );
   }
 
-  Widget _buildDivider(Color borderColor) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Divider(
-        color: borderColor,
-        height: 1,
-        thickness: 0.8,
+  // ➕ "Add" pill button
+  Widget _buildAddButton(VoidCallback onTap, Color color) {
+    return Material(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding:
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_rounded, color: color, size: 14),
+              const SizedBox(width: 3),
+              Text(
+                'Add',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+
+  // ✏️ Edit icon
+  Widget _buildEditIconButton(VoidCallback onTap, bool isDark) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(
+        Icons.edit_outlined,
+        color: isDark ? Colors.white60 : Colors.grey.shade600,
+        size: 18,
+      ),
+    );
+  }
+
+  Widget _buildDivider(Color borderColor) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: borderColor,
+      indent: 12,
+      endIndent: 12,
     );
   }
 }
 
-class _HeaderCurveClipper extends CustomClipper<Path> {
+// Custom Clipper for Smooth Curve
+class _HeaderClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 40);
+    Path path = Path();
+    path.lineTo(0, size.height - 45);
+
+    var firstControlPoint = Offset(size.width / 2, size.height + 15);
+    var firstEndPoint = Offset(size.width, size.height - 45);
+
     path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 40,
+      firstControlPoint.dx,
+      firstControlPoint.dy,
+      firstEndPoint.dx,
+      firstEndPoint.dy,
     );
+
     path.lineTo(size.width, 0);
     path.close();
     return path;
   }
 
   @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

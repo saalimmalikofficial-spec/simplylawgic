@@ -1,6 +1,7 @@
 // lib/services/storage_service.dart
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ ADDED
 import '../models/student_model.dart';
 
 class StorageService {
@@ -11,7 +12,44 @@ class StorageService {
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  // Token methods
+  // ============ TEST ATTEMPT STATE ============
+  // ✅ NOTE: SharedPreferences use kiya kyunki yeh non-sensitive data hai
+  // (FlutterSecureStorage bhi use kar sakte the, but SP fast hai)
+
+  static const String _keyStartedTests = 'started_test_ids';
+
+  /// Save karo ki user ne yeh test start kar diya hai
+  Future<void> markTestStarted(String testId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> started = prefs.getStringList(_keyStartedTests) ?? [];
+    if (!started.contains(testId)) {
+      started.add(testId);
+      await prefs.setStringList(_keyStartedTests, started);
+    }
+  }
+
+  /// Check karo ki user ne yeh test pehle start kiya tha kya
+  Future<bool> hasTestStarted(String testId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> started = prefs.getStringList(_keyStartedTests) ?? [];
+    return started.contains(testId);
+  }
+
+  /// Test submit hone par remove karo
+  Future<void> clearTestStarted(String testId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> started = prefs.getStringList(_keyStartedTests) ?? [];
+    started.remove(testId);
+    await prefs.setStringList(_keyStartedTests, started);
+  }
+
+  /// Logout par sab clear karo
+  Future<void> clearAllStartedTests() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyStartedTests);
+  }
+
+  // ============ TOKEN ============
   Future<void> saveToken(String token) async {
     await _storage.write(key: tokenKey, value: token);
   }
@@ -20,7 +58,7 @@ class StorageService {
     return await _storage.read(key: tokenKey);
   }
 
-  // Student methods — ✅ now saves ALL fields
+  // ============ STUDENT ============
   Future<void> saveStudent(Student student) async {
     await _storage.write(
       key: studentKey,
@@ -32,9 +70,9 @@ class StorageService {
         'preparingForExam': student.preparingForExam,
         'preparingForExamLabel': student.preparingForExamLabel,
         'authProvider': student.authProvider,
-        'avatarUrl': student.avatarUrl,          // 👈 ADDED
-        'referralCode': student.referralCode,    // 👈 ADDED
-        'walletBalance': student.walletBalance,  // 👈 ADDED
+        'avatarUrl': student.avatarUrl,
+        'referralCode': student.referralCode,
+        'walletBalance': student.walletBalance,
       }),
     );
   }
@@ -52,7 +90,7 @@ class StorageService {
     return null;
   }
 
-  // Theme preference
+  // ============ THEME ============
   Future<void> saveThemePreference(bool isDark) async {
     await _storage.write(key: themeKey, value: isDark.toString());
   }
@@ -63,7 +101,7 @@ class StorageService {
     return null;
   }
 
-  // Profile complete
+  // ============ PROFILE COMPLETE ============
   Future<void> saveProfileComplete(bool complete) async {
     await _storage.write(key: profileCompleteKey, value: complete.toString());
   }
@@ -73,39 +111,38 @@ class StorageService {
     return value == 'true';
   }
 
-  // Check if user is logged in
+  // ============ AUTH CHECK ============
   Future<bool> isLoggedIn() async {
     final String? token = await getToken();
     return token != null && token.isNotEmpty;
   }
 
-  // ✅ Convenience method: save full sign-in response in one shot
+  // ============ CONVENIENCE ============
   Future<void> saveSignInResponse(Map<String, dynamic> response) async {
-    // Token
     final token = response['token'];
     if (token is String && token.isNotEmpty) {
       await saveToken(token);
     }
 
-    // Student
     final studentJson = response['student'];
     if (studentJson is Map<String, dynamic>) {
       final student = Student.fromJson(studentJson);
       await saveStudent(student);
     }
 
-    // Profile complete
     final profileComplete = response['profileComplete'];
     if (profileComplete is bool) {
       await saveProfileComplete(profileComplete);
     }
   }
 
-  // Clear all data (logout)
+  // ============ CLEAR ALL (logout) ============
   Future<void> clearAll() async {
     await _storage.delete(key: tokenKey);
     await _storage.delete(key: studentKey);
     await _storage.delete(key: profileCompleteKey);
     await _storage.delete(key: themeKey);
+    // ✅ Also clear started tests on logout
+    await clearAllStartedTests();
   }
 }
